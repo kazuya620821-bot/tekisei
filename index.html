@@ -65,7 +65,7 @@ textarea{width:100%;min-height:110px;font:inherit;border:1px solid var(--line);b
 </head>
 <body>
 <header class="top">
-  <button class="ghost" id="back" aria-label="もどる">‹ もどる</button>
+  <button class="ghost" id="back" aria-label="戻る">‹ 戻る</button>
   <h1 id="ttl">適性検査トレーニング</h1>
   <span id="hdr"></span>
 </header>
@@ -74,13 +74,13 @@ textarea{width:100%;min-height:110px;font:inherit;border:1px solid var(--line);b
 <button class="fab hide" id="fab">✏️ メモ</button>
 <section id="pad" aria-label="手書きメモ">
   <div class="tb">
-    <b>けいさん用メモ</b>
+    <b>計算用メモ</b>
     <span id="cols"></span>
-    <button id="undo">1つ もどす</button>
-    <button id="clr">ぜんぶ消す</button>
-    <label class="note"><input type="checkbox" id="fing"> ゆびでも書く</label>
+    <button id="undo">1つ戻す</button>
+    <button id="clr">全部消す</button>
+    <label class="note"><input type="checkbox" id="fing"> 指でも書く</label>
     <span class="spacer"></span>
-    <button class="primary" id="padx">とじる</button>
+    <button class="primary" id="padx">閉じる</button>
   </div>
   <canvas id="padc"></canvas>
 </section>
@@ -102,7 +102,7 @@ const lastOf = pid => { const r = db.results.filter(x => x.pid === pid); return 
 const stars = n => '<span class="stars" aria-label="難度'+n+'">'+"★".repeat(n)+"☆".repeat(4-n)+'</span>';
 const pctCls = v => v >= 80 ? "good" : v >= 60 ? "mid" : "bad";
 const pct = r => Math.round(r.score / r.max * 100);
-function badge(pid){ const r = lastOf(pid); return r ? '<span class="badge '+pctCls(pct(r))+'">前回 '+r.score+'/'+r.max+'点</span>' : '<span class="badge">まだ</span>'; }
+function badge(pid){ const r = lastOf(pid); return r ? '<span class="badge '+pctCls(pct(r))+'">前回 '+r.score+'/'+r.max+'点</span>' : '<span class="badge">未着手</span>'; }
 
 let timerId = null, cur = null;
 function stopTimer(){ if (timerId) { clearInterval(timerId); timerId = null; } }
@@ -115,21 +115,21 @@ function home(){
   title("適性検査トレーニング"); setHdr(""); showFab(false);
   const n = db.results.length;
   $("#app").innerHTML = `
-  <p class="muted">岡山県立中学校の適性検査にそなえる練習アプリです。（問題はすべてオリジナルです）</p>
-  <h2>れんしゅう</h2>
+  <p class="muted">岡山県立中学校の適性検査に備える練習アプリです。（問題は全てオリジナルです）</p>
+  <h2>練習</h2>
   <div class="grid">
     <button class="card tile" data-go="#list/I"><b>Ⅰ 算数・理科</b><span>パターン別にじっくり練習</span></button>
     <button class="card tile" data-go="#list/II"><b>Ⅱ 国語・社会</b><span>読解・作文・資料の読み取り</span></button>
   </div>
-  <h2>45分 もぎ</h2>
+  <h2>45分 模擬</h2>
   <div class="grid">
     <button class="card tile" data-go="#mock/I"><b>Ⅰ 模擬（45分）</b><span>3つの課題をタイマー付きで</span></button>
     <button class="card tile" data-go="#mock/II"><b>Ⅱ 模擬（45分）</b><span>国語・作文・社会の3課題</span></button>
   </div>
-  <h2>ふりかえり</h2>
+  <h2>振り返り</h2>
   <div class="grid">
-    <button class="card tile" data-go="#review"><b>ふくしゅうリスト</b><span>点が取れなかった問題をもう一度</span></button>
-    <button class="card tile" data-go="#stats"><b>せいせき</b><span>${n}回ぶんの記録</span></button>
+    <button class="card tile" data-go="#review"><b>復習リスト</b><span>点が取れなかった問題をもう一度</span></button>
+    <button class="card tile" data-go="#stats"><b>成績</b><span>${n}回ぶんの記録</span></button>
   </div>
   <p class="note" style="margin-top:28px">記録はこのiPadの中だけに保存されます。ブラウザのデータを消すと記録も消えます。</p>`;
 }
@@ -139,7 +139,7 @@ function list(sub){
   const ps = P.filter(p => p.sub === sub);
   const groups = {};
   ps.forEach(p => (groups[p.unit] = groups[p.unit] || []).push(p));
-  let h = '<p class="muted">問題をえらんでね。★が多いほどむずかしい問題です。</p>';
+  let h = '<p class="muted">問題を選んでください。★が多いほど難しい問題です。</p>';
   for (const u in groups) {
     h += '<h2>'+esc(u)+'</h2>';
     groups[u].forEach(p => { h += `<button class="card item" data-go="#p/${p.id}"><span class="t"><b>${esc(p.title)}</b><br><span class="muted">${esc(p.pat)} ・ ${maxOf(p)}点</span></span>${stars(p.star)}${badge(p.id)}</button>`; });
@@ -155,7 +155,7 @@ function qHTML(p, pi){
     ${q.max ? `<div class="cnt" data-cnt="${pi}_${i}" data-max="${q.max}">0 / ${q.max}字</div>` : ""}
     <div class="ans">
       <div class="model"><b>答えの例</b><br>${esc(q.ans)}</div>
-      <p class="muted" style="margin:8px 0 2px">自分の答えに当てはまる所に ✓ をつけよう</p>
+      <p class="muted" style="margin:8px 0 2px">自分の答えに当てはまる所に ✓ を付けよう</p>
       ${q.rubric.map((r,j) => `<label class="chk"><input type="checkbox" data-pi="${pi}" data-qi="${i}" data-pt="${r[1]}"><span>${esc(r[0])}</span><span class="pt">${r[1]}点</span></label>`).join("")}
       <p class="muted"><b>ポイント</b>　${esc(q.exp)}</p>
     </div>
@@ -191,7 +191,7 @@ function practice(id){
   cur = {ps:[p], mode:"practice", saved:false};
   $("#app").innerHTML = `<div id="panel">${sceneHTML(p)}${qHTML(p,0)}
   <div class="row" style="margin-top:16px"><button class="primary" id="reveal">答え合わせをする</button></div>
-  <div id="after" class="hide card" style="margin-top:14px"><div id="sc"></div><div class="row" style="margin-top:10px"><button class="primary" id="save" disabled>記録する</button><button data-go="#list/${p.sub}">一覧にもどる</button></div></div></div>`;
+  <div id="after" class="hide card" style="margin-top:14px"><div id="sc"></div><div class="row" style="margin-top:10px"><button class="primary" id="save" disabled>記録する</button><button data-go="#list/${p.sub}">一覧に戻る</button></div></div></div>`;
   bindPanel($("#panel"));
 }
 
@@ -206,8 +206,8 @@ function mockStart(sub){
   }).filter(Boolean);
   const total = ids.reduce((a,p) => a + maxOf(p), 0);
   $("#app").innerHTML = `<div class="card"><h3>${esc(SUBN[sub])} 模擬検査</h3>
-  <p>制限時間は <b>45分</b>。課題は ${ids.length} つです（合計 ${total}点）。<br>はじめる前に、えんぴつと けしゴム、計算用紙（またはメモ機能）を用意しよう。</p>
-  <p class="note">まだ解いていない問題を優先して出します。時間がきたら自動で答え合わせの画面になります。</p>
+  <p>制限時間は <b>45分</b>。課題は${ids.length}つです（合計 ${total}点）。<br>始める前に、鉛筆と消しゴム、計算用紙（またはメモ機能）を用意しよう。</p>
+  <p class="note">まだ解いていない問題を優先して出します。時間が来たら自動で答え合わせの画面になります。</p>
   <div class="row"><button class="primary" id="go">スタート</button><button data-go="#">やめる</button></div></div>`;
   $("#go").onclick = () => mockRun(sub, ids);
 }
@@ -217,13 +217,13 @@ function mockRun(sub, ids){
   showFab(true); setHdr('<span class="timer" id="tm">45:00</span>');
   $("#app").innerHTML = `<div class="tabs" id="tabs">${ids.map((p,i)=>`<button data-tab="${i}" class="${i?'':'on'}">課題${i+1}</button>`).join("")}</div>
   <div id="panel">${ids.map((p,i)=>`<div class="mp ${i?'hide':''}" data-mp="${i}">${sceneHTML(p)}${qHTML(p,i)}</div>`).join("")}
-  <div class="row" style="margin-top:16px" id="fin"><button class="primary" id="finish">終わって答え合わせへ</button></div>
+  <div class="row" style="margin-top:16px" id="fin"><button class="primary" id="finish">終了して答え合わせへ</button></div>
   <div id="after" class="hide card" style="margin-top:14px"><div id="sc"></div><div class="row" style="margin-top:10px"><button class="primary" id="save" disabled>記録する</button><button data-go="#">ホームへ</button></div></div></div>`;
   bindPanel($("#panel"));
   $("#tabs").onclick = e => { const b = e.target.closest("[data-tab]"); if (!b) return; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x === b)); document.querySelectorAll(".mp").forEach(x => x.classList.toggle("hide", x.dataset.mp !== b.dataset.tab)); window.scrollTo(0,0); };
-  $("#finish").onclick = () => { if (confirm("答え合わせにすすみます。いいですか？")) mockEnd(); };
+  $("#finish").onclick = () => { if (confirm("答え合わせに進みます。よろしいですか？")) mockEnd(); };
   stopTimer();
-  const tick = () => { const left = Math.max(0, cur.end - Date.now()); const m = Math.floor(left/60000), s = Math.floor(left%60000/1000); const tm = $("#tm"); if (tm) { tm.textContent = String(m).padStart(2,"0")+":"+String(s).padStart(2,"0"); tm.classList.toggle("low", left < 5*60000); } if (left <= 0 && cur.phase === "solve") { alert("時間です！答え合わせにすすみます。"); mockEnd(); } };
+  const tick = () => { const left = Math.max(0, cur.end - Date.now()); const m = Math.floor(left/60000), s = Math.floor(left%60000/1000); const tm = $("#tm"); if (tm) { tm.textContent = String(m).padStart(2,"0")+":"+String(s).padStart(2,"0"); tm.classList.toggle("low", left < 5*60000); } if (left <= 0 && cur.phase === "solve") { alert("時間です！答え合わせに進みます。"); mockEnd(); } };
   tick(); timerId = setInterval(tick, 500);
 }
 function mockEnd(){
@@ -239,8 +239,8 @@ function mockEnd(){
 }
 
 function stats(){
-  title("せいせき"); setHdr(""); showFab(false);
-  if (!db.results.length) { $("#app").innerHTML = '<div class="card">まだ記録がありません。問題を解いて「記録する」をおしてみよう。</div>'; return; }
+  title("成績"); setHdr(""); showFab(false);
+  if (!db.results.length) { $("#app").innerHTML = '<div class="card">まだ記録がありません。問題を解いて「記録する」を押してみよう。</div>'; return; }
   const per = {};
   db.results.forEach(r => { const p = byId(r.pid); if (!p) return; const k = p.sub+"|"+p.unit; (per[k] = per[k] || {sub:p.sub, unit:p.unit, s:0, m:0, n:0}); per[k].s += r.score; per[k].m += r.max; per[k].n++; });
   let h = "";
@@ -250,21 +250,21 @@ function stats(){
     rows.sort((a,b) => a.s/a.m - b.s/b.m).forEach(x => { const v = Math.round(x.s/x.m*100); h += `<div style="margin:8px 0"><div class="row"><b>${esc(x.unit)}</b><span class="spacer"></span><span class="badge ${pctCls(v)}">${v}％</span><span class="muted">${x.n}回</span></div><div class="bar"><i style="width:${v}%"></i></div></div>`; });
     h += '</div>';
   });
-  if (db.mocks.length) { h += '<h2>模擬のきろく</h2><div class="card">'+db.mocks.slice().reverse().slice(0,10).map(m => `<div class="row"><span>${esc(m.date)}</span><b>${esc(m.sub==="I"?"Ⅰ":"Ⅱ")}</b><span class="spacer"></span><span class="badge ${pctCls(m.pct)}">${m.score}/${m.max}点（${m.pct}％）</span><span class="muted">${m.used}分</span></div>`).join("")+'</div>'; }
-  h += '<p class="note">得点率が低い単元から、ふくしゅうリストで練習しよう。</p><div class="row"><button id="rst">記録をぜんぶ消す</button></div>';
+  if (db.mocks.length) { h += '<h2>模擬の記録</h2><div class="card">'+db.mocks.slice().reverse().slice(0,10).map(m => `<div class="row"><span>${esc(m.date)}</span><b>${esc(m.sub==="I"?"Ⅰ":"Ⅱ")}</b><span class="spacer"></span><span class="badge ${pctCls(m.pct)}">${m.score}/${m.max}点（${m.pct}％）</span><span class="muted">${m.used}分</span></div>`).join("")+'</div>'; }
+  h += '<p class="note">得点率が低い単元から、復習リストで練習しよう。</p><div class="row"><button id="rst">記録を全部消す</button></div>';
   $("#app").innerHTML = h;
-  $("#rst").onclick = () => { if (confirm("記録をぜんぶ消します。元にもどせません。いいですか？")) { db = {results:[], mocks:[]}; persist(); stats(); } };
+  $("#rst").onclick = () => { if (confirm("記録を全部消します。元に戻せません。よろしいですか？")) { db = {results:[], mocks:[]}; persist(); stats(); } };
 }
 
 function review(){
-  title("ふくしゅうリスト"); setHdr(""); showFab(false);
+  title("復習リスト"); setHdr(""); showFab(false);
   const rows = P.map(p => ({p, r:lastOf(p.id)})).filter(x => x.r && pct(x.r) < 70).sort((a,b) => pct(a.r) - pct(b.r));
   const fresh = P.filter(p => !lastOf(p.id));
   let h = "";
   h += '<h2>もう一度やろう（前回の得点率が70％未満）</h2>';
-  h += rows.length ? rows.map(x => `<button class="card item" data-go="#p/${x.p.id}"><span class="t"><b>${esc(x.p.title)}</b><br><span class="muted">${esc(SUBN[x.p.sub].slice(0,5))} ・ ${esc(x.p.unit)}</span></span>${stars(x.p.star)}${badge(x.p.id)}</button>`).join("") : '<div class="card muted">いまはありません。よくできています！</div>';
+  h += rows.length ? rows.map(x => `<button class="card item" data-go="#p/${x.p.id}"><span class="t"><b>${esc(x.p.title)}</b><br><span class="muted">${esc(SUBN[x.p.sub].slice(0,5))} ・ ${esc(x.p.unit)}</span></span>${stars(x.p.star)}${badge(x.p.id)}</button>`).join("") : '<div class="card muted">今はありません。よくできています！</div>';
   h += '<h2>まだ解いていない問題</h2>';
-  h += fresh.length ? fresh.map(p => `<button class="card item" data-go="#p/${p.id}"><span class="t"><b>${esc(p.title)}</b><br><span class="muted">${esc(p.unit)}</span></span>${stars(p.star)}</button>`).join("") : '<div class="card muted">ぜんぶ解きました。</div>';
+  h += fresh.length ? fresh.map(p => `<button class="card item" data-go="#p/${p.id}"><span class="t"><b>${esc(p.title)}</b><br><span class="muted">${esc(p.unit)}</span></span>${stars(p.star)}</button>`).join("") : '<div class="card muted">全部解きました。</div>';
   $("#app").innerHTML = h;
 }
 
@@ -276,7 +276,7 @@ function route(){
   $("#back").classList.toggle("hide", !h[0]);
 }
 addEventListener("hashchange", route);
-$("#back").onclick = () => { if (cur && cur.mode === "mock" && cur.phase === "solve" && !confirm("模擬をやめてもどりますか？（入力は消えます）")) return; history.length > 1 ? history.back() : (location.hash = ""); };
+$("#back").onclick = () => { if (cur && cur.mode === "mock" && cur.phase === "solve" && !confirm("模擬を中止して戻りますか？（入力は消えます）")) return; history.length > 1 ? history.back() : (location.hash = ""); };
 document.addEventListener("click", e => {
   const g = e.target.closest("[data-go]"); if (g) { location.hash = g.dataset.go; return; }
   if (e.target.id === "reveal") { $("#panel").classList.add("revealed"); $("#reveal").classList.add("hide"); $("#after").classList.remove("hide"); updScore(); $("#panel .q .ans").scrollIntoView({behavior:"smooth", block:"start"}); }
