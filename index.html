@@ -21,6 +21,7 @@ main{max-width:980px;margin:0 auto;padding:16px 16px calc(120px + env(safe-area-
 button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:10px 18px;min-height:46px;cursor:pointer;touch-action:manipulation}
 button.primary{background:var(--main);border-color:var(--main);color:#fff;font-weight:700}
 button.ghost{border-color:transparent;background:transparent;color:var(--main);font-weight:700}
+button.small{min-height:38px;padding:4px 14px;font-size:16px}
 button:disabled{opacity:.45}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
@@ -40,10 +41,12 @@ table{border-collapse:collapse;margin:8px 0;font-size:17px}th,td{border:1px soli
 .q{margin:18px 0;padding:16px 18px}
 .q .qn{display:inline-block;background:var(--main);color:#fff;border-radius:8px;padding:0 10px;margin-right:8px;font-weight:700}
 textarea{width:100%;min-height:110px;font:inherit;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg);color:var(--ink);resize:vertical}
+textarea.out{min-height:220px;font-size:15px;line-height:1.5}
 .cnt{text-align:right;font-size:14px;color:var(--sub)}.cnt.over{color:var(--ng);font-weight:700}
 .ans{display:none;margin-top:12px;border-top:2px dashed var(--line);padding-top:12px}
 .revealed .ans{display:block}
 .ans .model{background:var(--main2);border-radius:10px;padding:8px 14px}
+.verdict{font-weight:700;margin:2px 0 8px}.verdict.ok{color:var(--ok)}.verdict.ng{color:var(--ng)}.verdict.na{color:var(--sub);font-weight:400;font-size:16px}
 .chk{display:flex;gap:10px;align-items:flex-start;padding:6px 0;min-height:44px}
 .chk input{width:26px;height:26px;margin-top:3px;flex:none}
 .chk .pt{margin-left:auto;color:var(--sub);white-space:nowrap}
@@ -60,6 +63,10 @@ textarea{width:100%;min-height:110px;font:inherit;border:1px solid var(--line);b
 .pill{display:inline-block;width:26px;height:26px;border-radius:50%;border:3px solid transparent;vertical-align:middle}
 .pill.on{border-color:var(--main)}
 .note{font-size:15px;color:var(--sub)}
+.sub{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.sub:last-child{border-bottom:0}.sub .t{flex:1}
+.msg{padding:10px 14px;border-radius:12px;background:var(--main2);margin-top:10px}
+.msg.err{color:var(--ng)}
 .hide{display:none!important}
 </style>
 </head>
@@ -93,16 +100,21 @@ const LS = "tekisei_v1";
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const SUBN = {I:"適性検査Ⅰ（算数・理科）", II:"適性検査Ⅱ（国語・社会）"};
-let db = (() => { try { return JSON.parse(localStorage.getItem(LS)) || {results:[], mocks:[]}; } catch(e) { return {results:[], mocks:[]}; } })();
-db.results = db.results || []; db.mocks = db.mocks || [];
+let db = (() => { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch(e) { return {}; } })();
+db.results = db.results || []; db.mocks = db.mocks || []; db.subs = db.subs || [];
 function persist(){ try { localStorage.setItem(LS, JSON.stringify(db)); } catch(e) {} }
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const today = () => { const d = new Date(); return d.getFullYear() + "/" + (d.getMonth()+1) + "/" + d.getDate(); };
 const byId = id => P.find(p => p.id === id);
-const maxOf = p => p.qs.reduce((a,q) => a + q.rubric.reduce((b,r) => b + r[1], 0), 0);
+const qMax = q => q.rubric.reduce((a,r) => a + r[1], 0);
+const maxOf = p => p.qs.reduce((a,q) => a + qMax(q), 0);
 const lastOf = pid => { const r = db.results.filter(x => x.pid === pid); return r[r.length-1]; };
 const stars = n => '<span class="stars" aria-label="難度'+n+'">'+"★".repeat(n)+"☆".repeat(4-n)+'</span>';
 const pctCls = v => v >= 80 ? "good" : v >= 60 ? "mid" : "bad";
 const pct = r => Math.round(r.score / r.max * 100);
 function badge(pid){ const r = lastOf(pid); return r ? '<span class="badge '+pctCls(pct(r))+'">前回 '+r.score+'/'+r.max+'点</span>' : '<span class="badge">未着手</span>'; }
+const nPend = () => db.subs.filter(s => s.state === "pending").length;
+const nSent = () => db.subs.filter(s => s.state === "sent").length;
 
 let timerId = null, cur = null;
 function stopTimer(){ if (timerId) { clearInterval(timerId); timerId = null; } }
@@ -110,10 +122,34 @@ function setHdr(h){ $("#hdr").innerHTML = h || ""; }
 function title(t){ $("#ttl").textContent = t; document.title = t + "｜適性検査トレーニング"; }
 function showFab(on){ $("#fab").classList.toggle("hide", !on); if (!on) $("#pad").classList.remove("open"); }
 
+/* ---------- 自動判定（数字・短い答えだけ。仮判定） ---------- */
+const normT = s => String(s).normalize("NFKC").toLowerCase().replace(/[\s　、。，．・「」『』（）()→―\-,.]/g, "");
+function judge(q, input){
+  const a = q.auto; if (!a) return null;
+  const s = String(input || "").trim();
+  if (a.t === "multi") {
+    const n = normT(s); let pos = -1;
+    return a.parts.map(p => {
+      if (!s) return false;
+      let best = -1;
+      for (const x of p) { const i = n.indexOf(normT(x), a.ordered ? pos + 1 : 0); if (i >= 0 && (best < 0 || i < best)) best = i; }
+      if (best >= 0) { if (a.ordered) pos = best; return true; }
+      return false;
+    });
+  }
+  if (!s) return false;
+  if (a.t === "num") { const m = s.normalize("NFKC").replace(/,/g, "").match(/-?\d+(?:\.\d+)?/g); return !!m && Math.abs(parseFloat(m[m.length-1]) - a.v) < 1e-9; }
+  const n = normT(s);
+  if (a.t === "text") return a.ok.some(x => normT(x) === n);
+  if (a.t === "has") return a.ok.some(x => n.includes(normT(x)));
+  return null;
+}
+const collect = pi => cur.ps[pi].qs.map((q,i) => { const t = document.querySelector('textarea[data-ans="'+pi+'_'+i+'"]'); return t ? t.value : ""; });
+
 /* ---------- 画面 ---------- */
 function home(){
   title("適性検査トレーニング"); setHdr(""); showFab(false);
-  const n = db.results.length;
+  const n = db.results.length, pe = nPend(), se = nSent();
   $("#app").innerHTML = `
   <p class="muted">岡山県立中学校の適性検査に備える練習アプリです。（問題は全てオリジナルです）</p>
   <h2>練習</h2>
@@ -126,10 +162,14 @@ function home(){
     <button class="card tile" data-go="#mock/I"><b>Ⅰ 模擬（45分）</b><span>3つの課題をタイマー付きで</span></button>
     <button class="card tile" data-go="#mock/II"><b>Ⅱ 模擬（45分）</b><span>国語・作文・社会の3課題</span></button>
   </div>
+  <h2>親に送る・採点を受け取る</h2>
+  <div class="grid">
+    <button class="card tile" data-go="#inbox"><b>送信・採点${pe||se ? '　<span class="badge bad">送信待ち '+pe+'・採点待ち '+se+'</span>' : ""}</b><span>解いた問題をまとめて送り、結果を入れる</span></button>
+  </div>
   <h2>振り返り</h2>
   <div class="grid">
     <button class="card tile" data-go="#review"><b>復習リスト</b><span>点が取れなかった問題をもう一度</span></button>
-    <button class="card tile" data-go="#stats"><b>成績</b><span>${n}回ぶんの記録</span></button>
+    <button class="card tile" data-go="#stats"><b>成績</b><span>${n}回分の記録</span></button>
   </div>
   <p class="note" style="margin-top:28px">記録はこのiPadの中だけに保存されます。ブラウザのデータを消すと記録も消えます。</p>`;
 }
@@ -154,9 +194,10 @@ function qHTML(p, pi){
     <textarea data-ans="${pi}_${i}" rows="${q.essay?8:3}" placeholder="${q.essay?'ここに200字以内で書こう':'ここに答えを書こう（式や考え方も）'}" ${q.essay?'maxlength="400"':''}></textarea>
     ${q.max ? `<div class="cnt" data-cnt="${pi}_${i}" data-max="${q.max}">0 / ${q.max}字</div>` : ""}
     <div class="ans">
+      <div class="verdict na" data-v="${pi}_${i}"></div>
       <div class="model"><b>答えの例</b><br>${esc(q.ans)}</div>
-      <p class="muted" style="margin:8px 0 2px">自分の答えに当てはまる所に ✓ を付けよう</p>
-      ${q.rubric.map((r,j) => `<label class="chk"><input type="checkbox" data-pi="${pi}" data-qi="${i}" data-pt="${r[1]}"><span>${esc(r[0])}</span><span class="pt">${r[1]}点</span></label>`).join("")}
+      <p class="muted" style="margin:8px 0 2px">自分の答えに当てはまる所に ✓ を付けよう（やり方が違っても、考え方が合っていれば付けてOK）</p>
+      ${q.rubric.map((r,j) => `<label class="chk"><input type="checkbox" data-pi="${pi}" data-qi="${i}" data-ri="${j}" data-pt="${r[1]}"><span>${esc(r[0])}</span><span class="pt">${r[1]}点</span></label>`).join("")}
       <p class="muted"><b>ポイント</b>　${esc(q.exp)}</p>
     </div>
   </div>`).join("");
@@ -182,16 +223,56 @@ function updScore(){
   if (!cur) return;
   let s = 0, m = 0; cur.ps.forEach((p,i) => { const r = scoreOf(i); s += r.score; m += r.max; });
   const el = $("#sc"); if (el) el.innerHTML = '合計 <span class="score">'+s+'</span> / '+m+' 点（'+Math.round(s/m*100)+'％）';
-  const sv = $("#save"); if (sv) sv.disabled = false;
+}
+// 自動で判定できる設問は、仮判定を表示して✓を先に入れる（自分で直せる）
+function applyAuto(){
+  cur.ps.forEach((p,pi) => {
+    const ans = collect(pi);
+    p.qs.forEach((q,qi) => {
+      const v = document.querySelector('[data-v="'+pi+'_'+qi+'"]'); if (!v) return;
+      const r = judge(q, ans[qi]);
+      const boxes = [...document.querySelectorAll('input[data-pi="'+pi+'"][data-qi="'+qi+'"]')];
+      if (r === null) { v.className = "verdict na"; v.textContent = "（自動判定なし：答えの例と見比べて✓を付けよう）"; return; }
+      if (Array.isArray(r)) {
+        boxes.forEach((b,j) => { b.checked = !!r[j]; });
+        const k = r.filter(Boolean).length;
+        v.className = "verdict " + (k === r.length ? "ok" : "ng");
+        v.textContent = "仮判定：" + k + " / " + r.length + " 個が合っていそう";
+      } else {
+        boxes.forEach(b => { b.checked = r; });
+        v.className = "verdict " + (r ? "ok" : "ng");
+        v.textContent = r ? "仮判定：○ 正解" : "仮判定：× 答えの例と見比べよう";
+      }
+    });
+  });
+  updScore();
+}
+// 解答を「送信待ち」に保存（1回の解答につき1件）
+function ensureSub(pi){
+  cur.subs = cur.subs || {};
+  const p = cur.ps[pi], ans = collect(pi);
+  if (!cur.subs[pi]) { const s = {id:uid(), pid:p.id, date:today(), answers:ans, state:"pending"}; db.subs.push(s); cur.subs[pi] = s; }
+  else cur.subs[pi].answers = ans;
+  return cur.subs[pi];
+}
+function queueAll(){
+  cur.ps.forEach((p,i) => ensureSub(i));
+  persist();
+}
+function afterQueued(){
+  const m = $("#qmsg"); if (!m) return;
+  m.innerHTML = '送信待ちに入れました。<button class="small" data-go="#inbox">送信・採点へ</button>';
+  m.classList.remove("hide");
 }
 
 function practice(id){
   const p = byId(id); if (!p) return home();
   title(p.title); setHdr(""); showFab(true);
-  cur = {ps:[p], mode:"practice", saved:false};
+  cur = {ps:[p], mode:"practice", saved:false, subs:{}};
   $("#app").innerHTML = `<div id="panel">${sceneHTML(p)}${qHTML(p,0)}
-  <div class="row" style="margin-top:16px"><button class="primary" id="reveal">答え合わせをする</button></div>
-  <div id="after" class="hide card" style="margin-top:14px"><div id="sc"></div><div class="row" style="margin-top:10px"><button class="primary" id="save" disabled>記録する</button><button data-go="#list/${p.sub}">一覧に戻る</button></div></div></div>`;
+  <div class="row" style="margin-top:16px"><button class="primary" id="reveal">自分で答え合わせをする</button><button id="queue">答えを保存して送信待ちにする</button></div>
+  <div id="qmsg" class="msg hide"></div>
+  <div id="after" class="hide card" style="margin-top:14px"><div id="sc"></div><div class="row" style="margin-top:10px"><button class="primary" id="save">自己採点を記録する</button><button data-go="#list/${p.sub}">一覧に戻る</button></div></div></div>`;
   bindPanel($("#panel"));
 }
 
@@ -208,17 +289,19 @@ function mockStart(sub){
   $("#app").innerHTML = `<div class="card"><h3>${esc(SUBN[sub])} 模擬検査</h3>
   <p>制限時間は <b>45分</b>。課題は${ids.length}つです（合計 ${total}点）。<br>始める前に、鉛筆と消しゴム、計算用紙（またはメモ機能）を用意しよう。</p>
   <p class="note">まだ解いていない問題を優先して出します。時間が来たら自動で答え合わせの画面になります。</p>
-  <div class="row"><button class="primary" id="go">スタート</button><button data-go="#">やめる</button></div></div>`;
+  <div class="row"><button class="primary" id="go">スタート</button><button data-go="#">中止</button></div></div>`;
   $("#go").onclick = () => mockRun(sub, ids);
 }
 
 function mockRun(sub, ids){
-  cur = {ps:ids, mode:"mock", sub, saved:false, end: Date.now() + 45*60*1000, phase:"solve"};
+  cur = {ps:ids, mode:"mock", sub, saved:false, subs:{}, end: Date.now() + 45*60*1000, phase:"solve"};
   showFab(true); setHdr('<span class="timer" id="tm">45:00</span>');
   $("#app").innerHTML = `<div class="tabs" id="tabs">${ids.map((p,i)=>`<button data-tab="${i}" class="${i?'':'on'}">課題${i+1}</button>`).join("")}</div>
   <div id="panel">${ids.map((p,i)=>`<div class="mp ${i?'hide':''}" data-mp="${i}">${sceneHTML(p)}${qHTML(p,i)}</div>`).join("")}
   <div class="row" style="margin-top:16px" id="fin"><button class="primary" id="finish">終了して答え合わせへ</button></div>
-  <div id="after" class="hide card" style="margin-top:14px"><div id="sc"></div><div class="row" style="margin-top:10px"><button class="primary" id="save" disabled>記録する</button><button data-go="#">ホームへ</button></div></div></div>`;
+  <div id="after" class="hide card" style="margin-top:14px"><div id="sc"></div>
+    <div class="row" style="margin-top:10px"><button class="primary" id="save">自己採点を記録して送信待ちに入れる</button><button id="queue">自己採点せず送信待ちに入れる</button><button data-go="#">ホームへ</button></div>
+    <div id="qmsg" class="msg hide"></div></div></div>`;
   bindPanel($("#panel"));
   $("#tabs").onclick = e => { const b = e.target.closest("[data-tab]"); if (!b) return; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x === b)); document.querySelectorAll(".mp").forEach(x => x.classList.toggle("hide", x.dataset.mp !== b.dataset.tab)); window.scrollTo(0,0); };
   $("#finish").onclick = () => { if (confirm("答え合わせに進みます。よろしいですか？")) mockEnd(); };
@@ -228,14 +311,133 @@ function mockRun(sub, ids){
 }
 function mockEnd(){
   stopTimer(); cur.phase = "score"; setHdr("");
-  const used = Math.min(45, Math.round((45*60000 - Math.max(0, cur.end - Date.now()))/60000));
-  cur.used = used;
+  cur.used = Math.min(45, Math.round((45*60000 - Math.max(0, cur.end - Date.now()))/60000));
   $("#panel").classList.add("revealed");
   $("#fin").classList.add("hide"); $("#after").classList.remove("hide");
   document.querySelectorAll(".mp").forEach(x => x.classList.remove("hide"));
   $("#tabs").classList.add("hide");
   document.querySelectorAll(".mp").forEach(x => { const h = document.createElement("h2"); h.textContent = "課題 "+(+x.dataset.mp+1); x.prepend(h); });
-  updScore(); window.scrollTo(0,0);
+  applyAuto(); window.scrollTo(0,0);
+}
+
+/* ---------- 送信・採点 ---------- */
+function htmlToText(h){
+  const d = document.createElement("div"); d.innerHTML = h;
+  d.querySelectorAll("br").forEach(b => b.replaceWith("\n"));
+  d.querySelectorAll("tr").forEach(r => { const t = [...r.children].map(c => c.textContent.trim()).join(" | "); r.replaceWith(document.createTextNode("\n" + t + "\n")); });
+  d.querySelectorAll("p,li,div,h3").forEach(e => e.append("\n"));
+  return d.textContent.replace(/\n{3,}/g, "\n\n").trim();
+}
+function buildText(list){
+  let t = "【適性検査 採点のお願い】\n"
+   + "次の解答を、各設問の採点基準で採点し、解説を付けてください。\n"
+   + "・設問ごとに得点を出し、できている点と直す点を、小学6年生に分かりやすく説明する。\n"
+   + "・採点基準と違うやり方でも、考え方が正しければ得点にする。\n"
+   + "・最後に、次の形式の「結果コード」を1行だけ書く。（各設問の得点をカンマ区切り、問題はセミコロン区切り。得点は配点以内）\n"
+   + "  例：結果:I-M4-01=2,4,6;II-W1-01=8\n";
+  list.forEach((s, k) => {
+    const p = byId(s.pid); if (!p) return;
+    t += "\n――――――――――\n■ " + p.id + "　" + p.title + "（難度" + p.star + "／満点" + maxOf(p) + "点）\n";
+    t += "【問題の場面】\n" + htmlToText(p.scene) + "\n";
+    p.qs.forEach((q, i) => {
+      t += "\n【設問" + (i+1) + "（" + qMax(q) + "点）】\n" + htmlToText(q.q) + "\n";
+      t += "模範解答：" + q.ans + "\n";
+      t += "採点基準：" + q.rubric.map(r => "・" + r[0] + "（" + r[1] + "点）").join(" ") + "\n";
+      t += "ポイント：" + q.exp + "\n";
+      t += "子どもの解答：" + ((s.answers[i] || "").trim() || "（無答）") + "\n";
+    });
+  });
+  return t;
+}
+async function shareText(text){
+  if (navigator.share) { try { await navigator.share({text}); return "shared"; } catch(e) { if (e && e.name === "AbortError") return "cancel"; } }
+  try { await navigator.clipboard.writeText(text); return "copied"; } catch(e) {}
+  return "manual";
+}
+async function sendSubs(list){
+  const box = $("#outbox"); const text = buildText(list);
+  box.innerHTML = `<div class="card" style="margin-top:12px"><b>送る文章</b><p class="muted">送れなかったときは、ここからコピーしてLINEなどに貼ってください。</p><textarea class="out" id="outt" readonly></textarea><div class="row" style="margin-top:8px"><button id="cpy" class="small">コピーする</button><button id="mk" class="small hide">送った（採点待ちにする）</button></div><div id="omsg" class="msg hide"></div></div>`;
+  $("#outt").value = text;
+  const say = (m, err) => { const o = $("#omsg"); o.textContent = m; o.classList.remove("hide"); o.classList.toggle("err", !!err); };
+  const mark = () => { list.forEach(s => { s.state = "sent"; s.sentAt = Date.now(); }); persist(); };
+  $("#cpy").onclick = async () => { try { await navigator.clipboard.writeText(text); say("コピーしました。"); } catch(e) { const t = $("#outt"); t.select(); say("文章を選択しました。長押しでコピーしてください。"); } };
+  $("#mk").onclick = () => { mark(); inbox(); };
+  const r = await shareText(text);
+  if (r === "shared" || r === "copied") { mark(); say(r === "copied" ? "コピーしました。LINEなどに貼って送ってください。採点待ちに移しました。" : "送りました。採点待ちに移しました。"); setTimeout(() => { if (location.hash === "#inbox") { const keep = $("#outt") && text; inbox(true); } }, 1500); }
+  else if (r === "manual") { $("#mk").classList.remove("hide"); say("自動で送れませんでした。上の文章をコピーして送り、そのあと「送った」を押してください。", true); }
+  else say("送信をやめました。まだ送信待ちのままです。");
+}
+function applyResult(raw){
+  const t = String(raw).normalize("NFKC");
+  const m = [...t.matchAll(/結果\s*[:：]\s*([^\n]+)/g)];
+  const body = m.length ? m[m.length-1][1] : t;
+  const ok = [], ng = [];
+  body.split(/[;；]/).map(x => x.trim()).filter(Boolean).forEach(ent => {
+    const mm = ent.match(/^([A-Za-z0-9\-]+)\s*=\s*([0-9.,\s]+)$/);
+    if (!mm) { ng.push("読み取れません：" + ent); return; }
+    const p = byId(mm[1]); if (!p) { ng.push("問題が見つかりません：" + mm[1]); return; }
+    const nums = mm[2].split(",").map(x => x.trim()).filter(x => x !== "").map(Number);
+    const qm = p.qs.map(qMax), tot = qm.reduce((a,b) => a + b, 0);
+    let items;
+    if (nums.length === qm.length) items = nums.map((v,i) => Math.max(0, Math.min(v, qm[i])));
+    else if (nums.length === 1) { let rest = Math.max(0, Math.min(nums[0], tot)); items = qm.map(x => { const v = Math.min(x, rest); rest -= v; return v; }); }
+    else { ng.push(p.title + "：得点の数が合いません（設問は" + qm.length + "つ）"); return; }
+    if (items.some(v => isNaN(v))) { ng.push(p.title + "：数字が読み取れません"); return; }
+    const score = items.reduce((a,b) => a + b, 0);
+    const cand = db.subs.filter(s => s.pid === p.id && s.state !== "graded"); let sub = cand[cand.length-1] || null;
+    if (!sub) { const g = db.subs.filter(s => s.pid === p.id && s.state === "graded"); sub = g[g.length-1] || null; }
+    let selfInfo = null;
+    if (sub) { const old = db.results.find(r => r.sid === sub.id); if (old) selfInfo = old.src === "self" ? {score:old.score, items:old.items} : (old.self || null); db.results = db.results.filter(r => r.sid !== sub.id); }
+    db.results.push({pid:p.id, date:today(), score, max:tot, mode:"parent", src:"parent", items, sid: sub ? sub.id : null, self: selfInfo});
+    if (sub) { sub.state = "graded"; sub.score = score; sub.max = tot; }
+    ok.push(p.title + "：" + score + " / " + tot + "点");
+  });
+  persist(); return {ok, ng};
+}
+function inbox(keepMsg){
+  title("送信・採点"); setHdr(""); showFab(false);
+  const pend = db.subs.filter(s => s.state === "pending"), sent = db.subs.filter(s => s.state === "sent");
+  const done = db.subs.filter(s => s.state === "graded").slice(-8).reverse();
+  const nm = s => { const p = byId(s.pid); return p ? esc(p.title) : esc(s.pid); };
+  const diffHTML = s => {
+    const p = byId(s.pid), r = db.results.find(x => x.sid === s.id && x.src === "parent"); if (!p || !r) return "";
+    if (!r.self) return '<div class="muted">自己採点はしていません</div>';
+    const rows = p.qs.map((q,i) => { const a = r.self.items[i] || 0, b = r.items[i] || 0, d = b - a, mx = qMax(q);
+      const lab = d === 0 ? "同じ" : d < 0 ? "自己採点が甘かった（" + d + "点）" : "自己採点が辛かった（＋" + d + "点）";
+      return `<tr><td>設問${i+1}</td><td>${a}/${mx}</td><td>${b}/${mx}</td><td style="color:var(--${d===0?"sub":d<0?"ng":"warn"})">${lab}</td></tr>`; }).join("");
+    const n = p.qs.filter((q,i) => (r.self.items[i]||0) !== (r.items[i]||0)).length;
+    return `<details style="margin-top:6px"><summary class="muted">自己採点とのちがい：${n ? n + "設問で違う" : "全部同じ"}</summary><table><tr><th></th><th>自己採点</th><th>親の採点</th><th>ちがい</th></tr>${rows}</table></details>`;
+  };
+  $("#app").innerHTML = `
+  <h2>① 親に送る</h2>
+  <div class="card">
+    ${pend.length ? pend.map(s => `<div class="sub"><span class="t"><b>${nm(s)}</b><br><span class="muted">${esc(s.date)} に解いた</span></span><button class="small" data-del="${s.id}">取り消す</button></div>`).join("") : '<p class="muted" style="margin:0">送信待ちの問題はありません。問題を解いて「送信待ちにする」を押すと、ここに入ります。</p>'}
+    <div class="row" style="margin-top:12px"><button class="primary" id="sendAll" ${pend.length ? "" : "disabled"}>まとめて送る（${pend.length}題）</button></div>
+    <div id="outbox"></div>
+  </div>
+  <h2>② 採点待ち</h2>
+  <div class="card">
+    ${sent.length ? sent.map(s => `<div class="sub"><span class="t"><b>${nm(s)}</b><br><span class="muted">${esc(s.date)}</span></span><span class="badge mid">採点待ち</span></div>`).join("") : '<p class="muted" style="margin:0">採点待ちの問題はありません。</p>'}
+    ${sent.length ? '<div class="row" style="margin-top:12px"><button class="small" id="resend">もう一度送る</button></div>' : ""}
+  </div>
+  <h2>③ 採点結果を入れる</h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0">返ってきた文章の最後にある「結果:…」の行を、貼り付けてください。</p>
+    <textarea id="rc" rows="3" placeholder="結果:I-M4-01=2,4,6;II-W1-01=8"></textarea>
+    <div class="row" style="margin-top:8px"><button class="primary" id="applyRc">反映する</button></div>
+    <div id="rcmsg"></div>
+  </div>
+  <h2>採点済み（最近）</h2>
+  <div class="card">${done.length ? done.map(s => `<div class="sub" style="display:block"><div class="row"><b class="t">${nm(s)}</b><span class="badge ${pctCls(Math.round(s.score/s.max*100))}">${s.score}/${s.max}点</span></div>${diffHTML(s)}</div>`).join("") : '<p class="muted" style="margin:0">まだありません。</p>'}</div>`;
+  $("#sendAll").onclick = () => sendSubs(pend);
+  const rs = $("#resend"); if (rs) rs.onclick = () => sendSubs(sent);
+  $("#applyRc").onclick = () => {
+    const raw = $("#rc").value; if (!raw.trim()) { $("#rcmsg").innerHTML = '<div class="msg err">結果の行を貼り付けてください。</div>'; return; }
+    const r = applyResult(raw);
+    $("#rcmsg").innerHTML = (r.ok.length ? '<div class="msg">' + r.ok.map(esc).join("<br>") + '<br>を記録しました。</div>' : "") + (r.ng.length ? '<div class="msg err">' + r.ng.map(esc).join("<br>") + "</div>" : "");
+    if (r.ok.length) { $("#rc").value = ""; setTimeout(() => { const keep = $("#rcmsg").innerHTML; inbox(true); $("#rcmsg").innerHTML = keep; }, 50); }
+  };
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { if (!confirm("この解答を送信待ちから取り消します。よろしいですか？")) return; db.subs = db.subs.filter(s => s.id !== b.dataset.del); persist(); inbox(); });
 }
 
 function stats(){
@@ -250,10 +452,13 @@ function stats(){
     rows.sort((a,b) => a.s/a.m - b.s/b.m).forEach(x => { const v = Math.round(x.s/x.m*100); h += `<div style="margin:8px 0"><div class="row"><b>${esc(x.unit)}</b><span class="spacer"></span><span class="badge ${pctCls(v)}">${v}％</span><span class="muted">${x.n}回</span></div><div class="bar"><i style="width:${v}%"></i></div></div>`; });
     h += '</div>';
   });
+  let hi = 0, lo = 0, same = 0;
+  db.results.forEach(r => { if (r.src !== "parent" || !r.self) return; const p = byId(r.pid); if (!p) return; p.qs.forEach((q,i) => { const a = r.self.items[i] || 0, b = r.items[i] || 0; if (a > b) hi++; else if (a < b) lo++; else same++; }); });
+  if (hi + lo + same) h += `<h2>自己採点と親の採点のちがい</h2><div class="card"><div class="row"><span>自己採点が甘かった設問</span><span class="spacer"></span><b>${hi}</b></div><div class="row"><span>同じだった設問</span><span class="spacer"></span><b>${same}</b></div><div class="row"><span>自己採点が辛かった設問</span><span class="spacer"></span><b>${lo}</b></div><p class="note" style="margin:8px 0 0">「甘かった」が多いときは、答えの例や採点基準を、もう一度見比べる練習をしよう。</p></div>`;
   if (db.mocks.length) { h += '<h2>模擬の記録</h2><div class="card">'+db.mocks.slice().reverse().slice(0,10).map(m => `<div class="row"><span>${esc(m.date)}</span><b>${esc(m.sub==="I"?"Ⅰ":"Ⅱ")}</b><span class="spacer"></span><span class="badge ${pctCls(m.pct)}">${m.score}/${m.max}点（${m.pct}％）</span><span class="muted">${m.used}分</span></div>`).join("")+'</div>'; }
-  h += '<p class="note">得点率が低い単元から、復習リストで練習しよう。</p><div class="row"><button id="rst">記録を全部消す</button></div>';
+  h += '<p class="note">得点率が低い単元から、復習リストで練習しよう。親の採点が戻った問題は、親の採点が成績に反映されます。</p><div class="row"><button id="rst">記録を全部消す</button></div>';
   $("#app").innerHTML = h;
-  $("#rst").onclick = () => { if (confirm("記録を全部消します。元に戻せません。よろしいですか？")) { db = {results:[], mocks:[]}; persist(); stats(); } };
+  $("#rst").onclick = () => { if (confirm("記録を全部消します。元に戻せません。よろしいですか？")) { db = {results:[], mocks:[], subs:[]}; persist(); stats(); } };
 }
 
 function review(){
@@ -272,20 +477,21 @@ function review(){
 function route(){
   stopTimer(); cur = null; window.scrollTo(0,0);
   const h = location.hash.replace(/^#/,"").split("/");
-  ({"list": () => list(h[1]), "p": () => practice(h[1]), "mock": () => mockStart(h[1]), "stats": stats, "review": review}[h[0]] || home)();
+  ({"list": () => list(h[1]), "p": () => practice(h[1]), "mock": () => mockStart(h[1]), "stats": stats, "review": review, "inbox": () => inbox()}[h[0]] || home)();
   $("#back").classList.toggle("hide", !h[0]);
 }
 addEventListener("hashchange", route);
 $("#back").onclick = () => { if (cur && cur.mode === "mock" && cur.phase === "solve" && !confirm("模擬を中止して戻りますか？（入力は消えます）")) return; history.length > 1 ? history.back() : (location.hash = ""); };
 document.addEventListener("click", e => {
   const g = e.target.closest("[data-go]"); if (g) { location.hash = g.dataset.go; return; }
-  if (e.target.id === "reveal") { $("#panel").classList.add("revealed"); $("#reveal").classList.add("hide"); $("#after").classList.remove("hide"); updScore(); $("#panel .q .ans").scrollIntoView({behavior:"smooth", block:"start"}); }
+  if (e.target.id === "reveal") { $("#panel").classList.add("revealed"); $("#reveal").classList.add("hide"); $("#after").classList.remove("hide"); applyAuto(); $("#panel .q .ans").scrollIntoView({behavior:"smooth", block:"start"}); }
+  if (e.target.id === "queue" && cur) { queueAll(); e.target.disabled = true; afterQueued(); }
   if (e.target.id === "save" && cur && !cur.saved) {
-    const d = new Date(), date = d.getFullYear()+"/"+(d.getMonth()+1)+"/"+d.getDate();
-    let S = 0, M = 0;
-    cur.ps.forEach((p,i) => { const r = scoreOf(i); S += r.score; M += r.max; db.results.push({pid:p.id, date, score:r.score, max:r.max, mode:cur.mode, items:r.items}); });
-    if (cur.mode === "mock") db.mocks.push({date, sub:cur.sub, score:S, max:M, pct:Math.round(S/M*100), used:cur.used});
+    const d = today(); let S = 0, M = 0;
+    cur.ps.forEach((p,i) => { const sub = ensureSub(i); const r = scoreOf(i); S += r.score; M += r.max; db.results.push({pid:p.id, date:d, score:r.score, max:r.max, mode:cur.mode, src:"self", items:r.items, sid:sub.id}); });
+    if (cur.mode === "mock") db.mocks.push({date:d, sub:cur.sub, score:S, max:M, pct:Math.round(S/M*100), used:cur.used});
     persist(); cur.saved = true; e.target.disabled = true; e.target.textContent = "記録しました ✓";
+    afterQueued();
   }
 });
 
