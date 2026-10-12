@@ -24,6 +24,7 @@ button.ghost{border-color:transparent;background:transparent;color:var(--main);f
 button.small{min-height:38px;padding:4px 14px;font-size:16px}
 button:disabled{opacity:.45}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.fig{display:block;width:100%;max-width:420px;height:auto;margin:8px auto;color:var(--ink)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
 .tile{display:block;text-align:left;width:100%;padding:18px}
 .tile b{display:block;font-size:21px}.tile span{color:var(--sub);font-size:16px}
@@ -138,7 +139,7 @@ function judge(q, input){
     });
   }
   if (!s) return false;
-  if (a.t === "num") { const m = s.normalize("NFKC").replace(/,/g, "").match(/-?\d+(?:\.\d+)?/g); return !!m && Math.abs(parseFloat(m[m.length-1]) - a.v) < 1e-9; }
+  if (a.t === "num") { const m = s.normalize("NFKC").replace(/,/g, "").replace(/(?:cm|㎝|m|ｍ|km|g|kg|L|l|mL|ml|円|個|人|度|分|秒|時間|枚|本|冊|点|倍|％|%)[2２3３²³]?/g, "").match(/-?\d+(?:\.\d+)?/g); return !!m && Math.abs(parseFloat(m[m.length-1]) - a.v) < 1e-9; }
   const n = normT(s);
   if (a.t === "text") return a.ok.some(x => normT(x) === n);
   if (a.t === "has") return a.ok.some(x => n.includes(normT(x)));
@@ -323,6 +324,7 @@ function mockEnd(){
 /* ---------- 送信・採点 ---------- */
 function htmlToText(h){
   const d = document.createElement("div"); d.innerHTML = h;
+  d.querySelectorAll("svg").forEach(s => s.replaceWith(document.createTextNode("［図：" + (s.getAttribute("aria-label")||"") + "］\n")));
   d.querySelectorAll("br").forEach(b => b.replaceWith("\n"));
   d.querySelectorAll("tr").forEach(r => { const t = [...r.children].map(c => c.textContent.trim()).join(" | "); r.replaceWith(document.createTextNode("\n" + t + "\n")); });
   d.querySelectorAll("p,li,div,h3").forEach(e => e.append("\n"));
