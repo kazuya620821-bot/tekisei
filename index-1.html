@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="適性検査">
+<meta name="theme-color" content="#1f4e8c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>適性検査トレーニング</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--ink:#1d2433;--sub:#5b6577;--line:#dfe3ec;--main:#1f4e8c;--main2:#e8f0fb;--ok:#1b7f4b;--ng:#c0392b;--warn:#b26a00;--star:#e0a100}
+@media (prefers-color-scheme:dark){:root{--bg:#10141c;--card:#1a2030;--ink:#eef1f7;--sub:#9aa5ba;--line:#2c354a;--main:#6aa5f0;--main2:#1c2a44;--ok:#4cc38a;--ng:#ff7b6b;--warn:#f0b34d;--star:#f0c24d}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;font-size:19px;line-height:1.75;-webkit-text-size-adjust:100%}
+header.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:10px 16px;padding-top:calc(10px + env(safe-area-inset-top))}
+header.top h1{font-size:20px;margin:0;flex:1;line-height:1.3}
+main{max-width:980px;margin:0 auto;padding:16px 16px calc(120px + env(safe-area-inset-bottom))}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:10px 18px;min-height:46px;cursor:pointer;touch-action:manipulation}
+button.primary{background:var(--main);border-color:var(--main);color:#fff;font-weight:700}
+button.ghost{border-color:transparent;background:transparent;color:var(--main);font-weight:700}
+button:disabled{opacity:.45}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+.tile{display:block;text-align:left;width:100%;padding:18px}
+.tile b{display:block;font-size:21px}.tile span{color:var(--sub);font-size:16px}
+h2{font-size:21px;margin:22px 0 8px}h3{font-size:19px;margin:0 0 6px}
+.muted{color:var(--sub);font-size:16px}
+.stars{color:var(--star);letter-spacing:1px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+.badge{display:inline-block;font-size:14px;border-radius:999px;padding:1px 10px;border:1px solid var(--line);color:var(--sub);white-space:nowrap}
+.badge.good{color:var(--ok);border-color:var(--ok)}.badge.mid{color:var(--warn);border-color:var(--warn)}.badge.bad{color:var(--ng);border-color:var(--ng)}
+.item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;margin-bottom:10px;padding:14px 16px}
+.item .t{flex:1}
+table{border-collapse:collapse;margin:8px 0;font-size:17px}th,td{border:1px solid var(--line);padding:6px 12px;text-align:center}th{background:var(--main2)}
+.passage{background:var(--main2);border-radius:12px;padding:6px 18px;margin:10px 0}
+.q{margin:18px 0;padding:16px 18px}
+.q .qn{display:inline-block;background:var(--main);color:#fff;border-radius:8px;padding:0 10px;margin-right:8px;font-weight:700}
+textarea{width:100%;min-height:110px;font:inherit;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg);color:var(--ink);resize:vertical}
+.cnt{text-align:right;font-size:14px;color:var(--sub)}.cnt.over{color:var(--ng);font-weight:700}
+.ans{display:none;margin-top:12px;border-top:2px dashed var(--line);padding-top:12px}
+.revealed .ans{display:block}
+.ans .model{background:var(--main2);border-radius:10px;padding:8px 14px}
+.chk{display:flex;gap:10px;align-items:flex-start;padding:6px 0;min-height:44px}
+.chk input{width:26px;height:26px;margin-top:3px;flex:none}
+.chk .pt{margin-left:auto;color:var(--sub);white-space:nowrap}
+.score{font-size:22px;font-weight:700}
+.bar{height:16px;background:var(--line);border-radius:8px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--main)}
+.tabs{display:flex;gap:8px;margin:6px 0 12px;flex-wrap:wrap}
+.tabs button.on{background:var(--main);color:#fff;border-color:var(--main)}
+.timer{font-variant-numeric:tabular-nums;font-size:24px;font-weight:700;color:var(--main)}.timer.low{color:var(--ng)}
+.fab{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:8;box-shadow:0 4px 14px rgba(0,0,0,.25);border-radius:999px;background:var(--main);color:#fff;border:0;padding:12px 22px;font-weight:700}
+#pad{position:fixed;left:0;right:0;bottom:0;height:52vh;z-index:9;background:var(--card);border-top:2px solid var(--main);display:none;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
+#pad.open{display:flex}
+#pad .tb{display:flex;gap:8px;align-items:center;padding:8px 12px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+#padc{flex:1;width:100%;touch-action:none;background:repeating-linear-gradient(transparent 0 31px,var(--line) 31px 32px)}
+.pill{display:inline-block;width:26px;height:26px;border-radius:50%;border:3px solid transparent;vertical-align:middle}
+.pill.on{border-color:var(--main)}
+.note{font-size:15px;color:var(--sub)}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header class="top">
+  <button class="ghost" id="back" aria-label="戻る">‹ 戻る</button>
+  <h1 id="ttl">適性検査トレーニング</h1>
+  <span id="hdr"></span>
+</header>
+<main id="app"></main>
+
+<button class="fab hide" id="fab">✏️ メモ</button>
+<section id="pad" aria-label="手書きメモ">
+  <div class="tb">
+    <b>計算用メモ</b>
+    <span id="cols"></span>
+    <button id="undo">1つ戻す</button>
+    <button id="clr">全部消す</button>
+    <label class="note"><input type="checkbox" id="fing"> 指でも書く</label>
+    <span class="spacer"></span>
+    <button class="primary" id="padx">閉じる</button>
+  </div>
+  <canvas id="padc"></canvas>
+</section>
+
+<script src="problems.js"></script>
+<script>
+"use strict";
+const P = window.PROBLEMS || [];
+const LS = "tekisei_v1";
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const SUBN = {I:"適性検査Ⅰ（算数・理科）", II:"適性検査Ⅱ（国語・社会）"};
+let db = (() => { try { return JSON.parse(localStorage.getItem(LS)) || {results:[], mocks:[]}; } catch(e) { return {results:[], mocks:[]}; } })();
+db.results = db.results || []; db.mocks = db.mocks || [];
+function persist(){ try { localStorage.setItem(LS, JSON.stringify(db)); } catch(e) {} }
+const byId = id => P.find(p => p.id === id);
+const maxOf = p => p.qs.reduce((a,q) => a + q.rubric.reduce((b,r) => b + r[1], 0), 0);
+const lastOf = pid => { const r = db.results.filter(x => x.pid === pid); return r[r.length-1]; };
+const stars = n => '<span class="stars" aria-label="難度'+n+'">'+"★".repeat(n)+"☆".repeat(4-n)+'</span>';
+const pctCls = v => v >= 80 ? "good" : v >= 60 ? "mid" : "bad";
+const pct = r => Math.round(r.score / r.max * 100);
+function badge(pid){ const r = lastOf(pid); return r ? '<span class="badge '+pctCls(pct(r))+'">前回 '+r.score+'/'+r.max+'点</span>' : '<span class="badge">未着手</span>'; }
+
+let timerId = null, cur = null;
+function stopTimer(){ if (timerId) { clearInterval(timerId); timerId = null; } }
+function setHdr(h){ $("#hdr").innerHTML = h || ""; }
+function title(t){ $("#ttl").textContent = t; document.title = t + "｜適性検査トレーニング"; }
+function showFab(on){ $("#fab").classList.toggle("hide", !on); if (!on) $("#pad").classList.remove("open"); }
+
+/* ---------- 画面 ---------- */
+function home(){
+  title("適性検査トレーニング"); setHdr(""); showFab(false);
+  const n = db.results.length;
+  $("#app").innerHTML = `
+  <p class="muted">岡山県立中学校の適性検査に備える練習アプリです。（問題は全てオリジナルです）</p>
+  <h2>練習</h2>
+  <div class="grid">
+    <button class="card tile" data-go="#list/I"><b>Ⅰ 算数・理科</b><span>パターン別にじっくり練習</span></button>
+    <button class="card tile" data-go="#list/II"><b>Ⅱ 国語・社会</b><span>読解・作文・資料の読み取り</span></button>
+  </div>
+  <h2>45分 模擬</h2>
+  <div class="grid">
+    <button class="card tile" data-go="#mock/I"><b>Ⅰ 模擬（45分）</b><span>3つの課題をタイマー付きで</span></button>
+    <button class="card tile" data-go="#mock/II"><b>Ⅱ 模擬（45分）</b><span>国語・作文・社会の3課題</span></button>
+  </div>
+  <h2>振り返り</h2>
+  <div class="grid">
+    <button class="card tile" data-go="#review"><b>復習リスト</b><span>点が取れなかった問題をもう一度</span></button>
+    <button class="card tile" data-go="#stats"><b>成績</b><span>${n}回ぶんの記録</span></button>
+  </div>
+  <p class="note" style="margin-top:28px">記録はこのiPadの中だけに保存されます。ブラウザのデータを消すと記録も消えます。</p>`;
+}
+
+function list(sub){
+  title(SUBN[sub]); setHdr(""); showFab(false);
+  const ps = P.filter(p => p.sub === sub);
+  const groups = {};
+  ps.forEach(p => (groups[p.unit] = groups[p.unit] || []).push(p));
+  let h = '<p class="muted">問題を選んでください。★が多いほど難しい問題です。</p>';
+  for (const u in groups) {
+    h += '<h2>'+esc(u)+'</h2>';
+    groups[u].forEach(p => { h += `<button class="card item" data-go="#p/${p.id}"><span class="t"><b>${esc(p.title)}</b><br><span class="muted">${esc(p.pat)} ・ ${maxOf(p)}点</span></span>${stars(p.star)}${badge(p.id)}</button>`; });
+  }
+  $("#app").innerHTML = h;
+}
+
+function qHTML(p, pi){
+  return p.qs.map((q,i) => `
+  <div class="card q" data-q="${i}">
+    <div><span class="qn">${i+1}</span>${q.q}</div>
+    <textarea data-ans="${pi}_${i}" rows="${q.essay?8:3}" placeholder="${q.essay?'ここに200字以内で書こう':'ここに答えを書こう（式や考え方も）'}" ${q.essay?'maxlength="400"':''}></textarea>
+    ${q.max ? `<div class="cnt" data-cnt="${pi}_${i}" data-max="${q.max}">0 / ${q.max}字</div>` : ""}
+    <div class="ans">
+      <div class="model"><b>答えの例</b><br>${esc(q.ans)}</div>
+      <p class="muted" style="margin:8px 0 2px">自分の答えに当てはまる所に ✓ を付けよう（やり方が違っても、考え方が合っていれば付けてOK）</p>
+      ${q.rubric.map((r,j) => `<label class="chk"><input type="checkbox" data-pi="${pi}" data-qi="${i}" data-pt="${r[1]}"><span>${esc(r[0])}</span><span class="pt">${r[1]}点</span></label>`).join("")}
+      <p class="muted"><b>ポイント</b>　${esc(q.exp)}</p>
+    </div>
+  </div>`).join("");
+}
+const sceneHTML = p => `<div class="card"><h3>${esc(p.title)}　${stars(p.star)}</h3>${p.scene}</div>`;
+
+function bindPanel(root){
+  root.addEventListener("input", e => {
+    const t = e.target;
+    if (t.matches("textarea[data-ans]")) {
+      const c = root.querySelector('[data-cnt="'+t.dataset.ans+'"]');
+      if (c) { const n = [...t.value.replace(/\n/g,"")].length, m = +c.dataset.max; c.textContent = n+" / "+m+"字"; c.classList.toggle("over", n > m); }
+    }
+  });
+  root.addEventListener("change", e => { if (e.target.matches('input[type=checkbox][data-pi]')) updScore(); });
+}
+function scoreOf(pi){
+  const p = cur.ps[pi]; let s = 0; const items = p.qs.map(() => 0);
+  document.querySelectorAll('input[data-pi="'+pi+'"]:checked').forEach(c => { s += +c.dataset.pt; items[+c.dataset.qi] += +c.dataset.pt; });
+  return {score:s, max:maxOf(p), items};
+}
+function updScore(){
+  if (!cur) return;
+  let s = 0, m = 0; cur.ps.forEach((p,i) => { const r = scoreOf(i); s += r.score; m += r.max; });
+  const el = $("#sc"); if (el) el.innerHTML = '合計 <span class="score">'+s+'</span> / '+m+' 点（'+Math.round(s/m*100)+'％）';
+  const sv = $("#save"); if (sv) sv.disabled = false;
+}
+
+function practice(id){
+  const p = byId(id); if (!p) return home();
+  title(p.title); setHdr(""); showFab(true);
+  cur = {ps:[p], mode:"practice", saved:false};
+  $("#app").innerHTML = `<div id="panel">${sceneHTML(p)}${qHTML(p,0)}
+  <div class="row" style="margin-top:16px"><button class="primary" id="reveal">答え合わせをする</button></div>
+  <div id="after" class="hide card" style="margin-top:14px"><div id="sc"></div><div class="row" style="margin-top:10px"><button class="primary" id="save" disabled>記録する</button><button data-go="#list/${p.sub}">一覧に戻る</button></div></div></div>`;
+  bindPanel($("#panel"));
+}
+
+function mockStart(sub){
+  title(SUBN[sub].replace(/（.*）/,"")+" 模擬"); showFab(false);
+  const slots = ["k1","k2","k3"];
+  const ids = slots.map(s => {
+    const pool = P.filter(p => p.sub === sub && p.slot === s);
+    const fresh = pool.filter(p => !lastOf(p.id));
+    const from = fresh.length ? fresh : pool;
+    return from[Math.floor(Math.random()*from.length)];
+  }).filter(Boolean);
+  const total = ids.reduce((a,p) => a + maxOf(p), 0);
+  $("#app").innerHTML = `<div class="card"><h3>${esc(SUBN[sub])} 模擬検査</h3>
+  <p>制限時間は <b>45分</b>。課題は${ids.length}つです（合計 ${total}点）。<br>始める前に、鉛筆と消しゴム、計算用紙（またはメモ機能）を用意しよう。</p>
+  <p class="note">まだ解いていない問題を優先して出します。時間が来たら自動で答え合わせの画面になります。</p>
+  <div class="row"><button class="primary" id="go">スタート</button><button data-go="#">やめる</button></div></div>`;
+  $("#go").onclick = () => mockRun(sub, ids);
+}
+
+function mockRun(sub, ids){
+  cur = {ps:ids, mode:"mock", sub, saved:false, end: Date.now() + 45*60*1000, phase:"solve"};
+  showFab(true); setHdr('<span class="timer" id="tm">45:00</span>');
+  $("#app").innerHTML = `<div class="tabs" id="tabs">${ids.map((p,i)=>`<button data-tab="${i}" class="${i?'':'on'}">課題${i+1}</button>`).join("")}</div>
+  <div id="panel">${ids.map((p,i)=>`<div class="mp ${i?'hide':''}" data-mp="${i}">${sceneHTML(p)}${qHTML(p,i)}</div>`).join("")}
+  <div class="row" style="margin-top:16px" id="fin"><button class="primary" id="finish">終了して答え合わせへ</button></div>
+  <div id="after" class="hide card" style="margin-top:14px"><div id="sc"></div><div class="row" style="margin-top:10px"><button class="primary" id="save" disabled>記録する</button><button data-go="#">ホームへ</button></div></div></div>`;
+  bindPanel($("#panel"));
+  $("#tabs").onclick = e => { const b = e.target.closest("[data-tab]"); if (!b) return; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x === b)); document.querySelectorAll(".mp").forEach(x => x.classList.toggle("hide", x.dataset.mp !== b.dataset.tab)); window.scrollTo(0,0); };
+  $("#finish").onclick = () => { if (confirm("答え合わせに進みます。よろしいですか？")) mockEnd(); };
+  stopTimer();
+  const tick = () => { const left = Math.max(0, cur.end - Date.now()); const m = Math.floor(left/60000), s = Math.floor(left%60000/1000); const tm = $("#tm"); if (tm) { tm.textContent = String(m).padStart(2,"0")+":"+String(s).padStart(2,"0"); tm.classList.toggle("low", left < 5*60000); } if (left <= 0 && cur.phase === "solve") { alert("時間です！答え合わせに進みます。"); mockEnd(); } };
+  tick(); timerId = setInterval(tick, 500);
+}
+function mockEnd(){
+  stopTimer(); cur.phase = "score"; setHdr("");
+  const used = Math.min(45, Math.round((45*60000 - Math.max(0, cur.end - Date.now()))/60000));
+  cur.used = used;
+  $("#panel").classList.add("revealed");
+  $("#fin").classList.add("hide"); $("#after").classList.remove("hide");
+  document.querySelectorAll(".mp").forEach(x => x.classList.remove("hide"));
+  $("#tabs").classList.add("hide");
+  document.querySelectorAll(".mp").forEach(x => { const h = document.createElement("h2"); h.textContent = "課題 "+(+x.dataset.mp+1); x.prepend(h); });
+  updScore(); window.scrollTo(0,0);
+}
+
+function stats(){
+  title("成績"); setHdr(""); showFab(false);
+  if (!db.results.length) { $("#app").innerHTML = '<div class="card">まだ記録がありません。問題を解いて「記録する」を押してみよう。</div>'; return; }
+  const per = {};
+  db.results.forEach(r => { const p = byId(r.pid); if (!p) return; const k = p.sub+"|"+p.unit; (per[k] = per[k] || {sub:p.sub, unit:p.unit, s:0, m:0, n:0}); per[k].s += r.score; per[k].m += r.max; per[k].n++; });
+  let h = "";
+  ["I","II"].forEach(sub => {
+    const rows = Object.values(per).filter(x => x.sub === sub); if (!rows.length) return;
+    h += '<h2>'+esc(SUBN[sub])+'　単元ごとの得点率</h2><div class="card">';
+    rows.sort((a,b) => a.s/a.m - b.s/b.m).forEach(x => { const v = Math.round(x.s/x.m*100); h += `<div style="margin:8px 0"><div class="row"><b>${esc(x.unit)}</b><span class="spacer"></span><span class="badge ${pctCls(v)}">${v}％</span><span class="muted">${x.n}回</span></div><div class="bar"><i style="width:${v}%"></i></div></div>`; });
+    h += '</div>';
+  });
+  if (db.mocks.length) { h += '<h2>模擬の記録</h2><div class="card">'+db.mocks.slice().reverse().slice(0,10).map(m => `<div class="row"><span>${esc(m.date)}</span><b>${esc(m.sub==="I"?"Ⅰ":"Ⅱ")}</b><span class="spacer"></span><span class="badge ${pctCls(m.pct)}">${m.score}/${m.max}点（${m.pct}％）</span><span class="muted">${m.used}分</span></div>`).join("")+'</div>'; }
+  h += '<p class="note">得点率が低い単元から、復習リストで練習しよう。</p><div class="row"><button id="rst">記録を全部消す</button></div>';
+  $("#app").innerHTML = h;
+  $("#rst").onclick = () => { if (confirm("記録を全部消します。元に戻せません。よろしいですか？")) { db = {results:[], mocks:[]}; persist(); stats(); } };
+}
+
+function review(){
+  title("復習リスト"); setHdr(""); showFab(false);
+  const rows = P.map(p => ({p, r:lastOf(p.id)})).filter(x => x.r && pct(x.r) < 70).sort((a,b) => pct(a.r) - pct(b.r));
+  const fresh = P.filter(p => !lastOf(p.id));
+  let h = "";
+  h += '<h2>もう一度やろう（前回の得点率が70％未満）</h2>';
+  h += rows.length ? rows.map(x => `<button class="card item" data-go="#p/${x.p.id}"><span class="t"><b>${esc(x.p.title)}</b><br><span class="muted">${esc(SUBN[x.p.sub].slice(0,5))} ・ ${esc(x.p.unit)}</span></span>${stars(x.p.star)}${badge(x.p.id)}</button>`).join("") : '<div class="card muted">今はありません。よくできています！</div>';
+  h += '<h2>まだ解いていない問題</h2>';
+  h += fresh.length ? fresh.map(p => `<button class="card item" data-go="#p/${p.id}"><span class="t"><b>${esc(p.title)}</b><br><span class="muted">${esc(p.unit)}</span></span>${stars(p.star)}</button>`).join("") : '<div class="card muted">全部解きました。</div>';
+  $("#app").innerHTML = h;
+}
+
+/* ---------- ルーター・イベント ---------- */
+function route(){
+  stopTimer(); cur = null; window.scrollTo(0,0);
+  const h = location.hash.replace(/^#/,"").split("/");
+  ({"list": () => list(h[1]), "p": () => practice(h[1]), "mock": () => mockStart(h[1]), "stats": stats, "review": review}[h[0]] || home)();
+  $("#back").classList.toggle("hide", !h[0]);
+}
+addEventListener("hashchange", route);
+$("#back").onclick = () => { if (cur && cur.mode === "mock" && cur.phase === "solve" && !confirm("模擬を中止して戻りますか？（入力は消えます）")) return; history.length > 1 ? history.back() : (location.hash = ""); };
+document.addEventListener("click", e => {
+  const g = e.target.closest("[data-go]"); if (g) { location.hash = g.dataset.go; return; }
+  if (e.target.id === "reveal") { $("#panel").classList.add("revealed"); $("#reveal").classList.add("hide"); $("#after").classList.remove("hide"); updScore(); $("#panel .q .ans").scrollIntoView({behavior:"smooth", block:"start"}); }
+  if (e.target.id === "save" && cur && !cur.saved) {
+    const d = new Date(), date = d.getFullYear()+"/"+(d.getMonth()+1)+"/"+d.getDate();
+    let S = 0, M = 0;
+    cur.ps.forEach((p,i) => { const r = scoreOf(i); S += r.score; M += r.max; db.results.push({pid:p.id, date, score:r.score, max:r.max, mode:cur.mode, items:r.items}); });
+    if (cur.mode === "mock") db.mocks.push({date, sub:cur.sub, score:S, max:M, pct:Math.round(S/M*100), used:cur.used});
+    persist(); cur.saved = true; e.target.disabled = true; e.target.textContent = "記録しました ✓";
+  }
+});
+
+/* ---------- 手書きメモ ---------- */
+(() => {
+  const cv = $("#padc"), ctx = cv.getContext("2d"); let strokes = [], curS = null, color = "#1d2433";
+  const COLS = ["#1d2433", "#d6342a", "#1f6fd1"];
+  $("#cols").innerHTML = COLS.map((c,i) => `<button data-c="${c}" aria-label="色${i+1}" style="padding:4px 8px;min-height:40px"><span class="pill ${i?'':'on'}" style="background:${c}"></span></button>`).join("");
+  $("#cols").onclick = e => { const b = e.target.closest("[data-c]"); if (!b) return; color = b.dataset.c; document.querySelectorAll("#cols .pill").forEach(x => x.classList.remove("on")); b.querySelector(".pill").classList.add("on"); };
+  function size(){ const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; cv.width = Math.max(1, r.width*dpr); cv.height = Math.max(1, r.height*dpr); redraw(); }
+  function draw(s){ if (s.pts.length < 1) return; const dpr = window.devicePixelRatio || 1; ctx.strokeStyle = s.c; ctx.lineWidth = 2.6*dpr; ctx.lineCap = ctx.lineJoin = "round"; ctx.beginPath(); ctx.moveTo(s.pts[0][0]*dpr, s.pts[0][1]*dpr); if (s.pts.length === 1) ctx.lineTo(s.pts[0][0]*dpr+.1, s.pts[0][1]*dpr); s.pts.slice(1).forEach(p => ctx.lineTo(p[0]*dpr, p[1]*dpr)); ctx.stroke(); }
+  function redraw(){ ctx.clearRect(0,0,cv.width,cv.height); strokes.forEach(draw); }
+  const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  cv.addEventListener("pointerdown", e => { if (e.pointerType === "touch" && !$("#fing").checked) return; e.preventDefault(); cv.setPointerCapture(e.pointerId); curS = {c:color, pts:[pos(e)]}; strokes.push(curS); draw(curS); });
+  cv.addEventListener("pointermove", e => { if (!curS) return; e.preventDefault(); const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e]; (evs.length ? evs : [e]).forEach(ev => curS.pts.push(pos(ev))); redraw(); });
+  const end = () => { curS = null; };
+  cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
+  $("#undo").onclick = () => { strokes.pop(); redraw(); };
+  $("#clr").onclick = () => { strokes = []; redraw(); };
+  $("#fab").onclick = () => { $("#pad").classList.add("open"); size(); };
+  $("#padx").onclick = () => $("#pad").classList.remove("open");
+  addEventListener("resize", () => { if ($("#pad").classList.contains("open")) size(); });
+})();
+
+/* ---------- 起動 ---------- */
+route();
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) { navigator.serviceWorker.register("sw.js").catch(() => {}); }
+</script>
+</body>
+</html>

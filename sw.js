@@ -1,5 +1,5 @@
 // オフライン用。ファイルを更新したら VERSION の数字を上げる。
-const VERSION = "v2";
+const VERSION = "v3";
 const CACHE = "tekisei-" + VERSION;
 const FILES = ["./", "index.html", "problems.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
