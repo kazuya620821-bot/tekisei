@@ -94,6 +94,7 @@ textarea.out{min-height:220px;font-size:15px;line-height:1.5}
 </section>
 
 <script src="problems.js"></script>
+<script src="buddy.js"></script>
 <script>
 "use strict";
 const P = window.PROBLEMS || [];
@@ -101,7 +102,7 @@ const LS = "tekisei_v1";
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const SUBN = {I:"適性検査Ⅰ（算数・理科）", II:"適性検査Ⅱ（国語・社会）"};
-let db = (() => { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch(e) { return {}; } })();
+let db = (() => { let raw = null; try { raw = localStorage.getItem(LS); return JSON.parse(raw) || {}; } catch(e) { if (raw) { try { localStorage.setItem(LS + "_broken_" + Date.now(), raw); } catch(_) {} window.__loadBroken = true; } return {}; } })();
 db.results = db.results || []; db.mocks = db.mocks || []; db.subs = db.subs || [];
 function persist(){ try { localStorage.setItem(LS, JSON.stringify(db)); } catch(e) {} }
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -149,14 +150,19 @@ const collect = pi => cur.ps[pi].qs.map((q,i) => { const t = document.querySelec
 
 /* ---------- 画面 ---------- */
 function home(){
+  if (window.Buddy) setTimeout(() => Buddy.check(), 400);
   title("適性検査トレーニング"); setHdr(""); showFab(false);
   const n = db.results.length, pe = nPend(), se = nSent();
   $("#app").innerHTML = `
+  ${window.__loadBroken ? '<div class="msg">保存データを読み込めませんでした。元のデータはバックアップとして残してあります。お手数ですが、保護者の方にお知らせください。</div>' : ""}
+  ${window.Buddy ? Buddy.card() : ""}
   <p class="muted">岡山県立中学校の適性検査に備える練習アプリです。（問題は全てオリジナルです）</p>
   <h2>練習</h2>
   <div class="grid">
-    <button class="card tile" data-go="#list/I"><b>Ⅰ 算数・理科</b><span>パターン別にじっくり練習</span></button>
-    <button class="card tile" data-go="#list/II"><b>Ⅱ 国語・社会</b><span>読解・作文・資料の読み取り</span></button>
+    <button class="card tile" data-go="#list/math"><b>算数</b><span>${cntOf("math")}</span></button>
+    <button class="card tile" data-go="#list/science"><b>理科</b><span>${cntOf("science")}</span></button>
+    <button class="card tile" data-go="#list/japanese"><b>国語</b><span>${cntOf("japanese")}</span></button>
+    <button class="card tile" data-go="#list/society"><b>社会</b><span>${cntOf("society")}</span></button>
   </div>
   <h2>45分 模擬</h2>
   <div class="grid">
@@ -175,9 +181,11 @@ function home(){
   <p class="note" style="margin-top:28px">記録はこのiPadの中だけに保存されます。ブラウザのデータを消すと記録も消えます。</p>`;
 }
 
+const SUBJT = {math:"算数", science:"理科", japanese:"国語", society:"社会"};
+function cntOf(k){ const ps = P.filter(p => Buddy.subjOf(p) === k); const d = ps.filter(p => db.results.some(r => r.pid === p.id)).length; return d + " / " + ps.length + " 問 取り組み済み"; }
 function list(sub){
-  title(SUBN[sub]); setHdr(""); showFab(false);
-  const ps = P.filter(p => p.sub === sub);
+  title(SUBJT[sub] || SUBN[sub]); setHdr(""); showFab(false);
+  const ps = P.filter(p => SUBJT[sub] ? Buddy.subjOf(p) === sub : p.sub === sub);
   const groups = {};
   ps.forEach(p => (groups[p.unit] = groups[p.unit] || []).push(p));
   let h = '<p class="muted">問題を選んでください。★が多いほど難しい問題です。</p>';
@@ -259,6 +267,7 @@ function ensureSub(pi){
 function queueAll(){
   cur.ps.forEach((p,i) => ensureSub(i));
   persist();
+  if (window.Buddy) Buddy.complete(cur.ps.map(p => p.id), {});
 }
 function afterQueued(){
   const m = $("#qmsg"); if (!m) return;
@@ -336,7 +345,11 @@ function buildText(list){
    + "・設問ごとに得点を出し、できている点と直す点を、小学6年生に分かりやすく説明する。\n"
    + "・採点基準と違うやり方でも、考え方が正しければ得点にする。\n"
    + "・最後に、次の形式の「結果コード」を1行だけ書く。（各設問の得点をカンマ区切り、問題はセミコロン区切り。得点は配点以内）\n"
-   + "  例：結果:I-M4-01=2,4,6;II-W1-01=8\n";
+   + "  例：結果:I-M4-01=2,4,6;II-W1-01=8\n"
+   + "・見やすさのため、解説より前に、次の「採点一覧」を書く。（1行1設問：問題ID・設問番号・得点／配点・理由ひとこと）\n"
+   + "・採点に迷った設問や、模範解答・採点基準とずれて判断した設問には「★要確認」と付け、その理由を1行で書く。（親が確認すべき所を絞るため）\n"
+   + "・漢字の書きまちがいは、その設問で問われている内容が合っていれば、まちがい1か所につき1点まで減点し、理由に書く。\n"
+   + "・解説は、問題ごとに短く（できた点・直す点を各1〜2文）。\n";
   list.forEach((s, k) => {
     const p = byId(s.pid); if (!p) return;
     t += "\n――――――――――\n■ " + p.id + "　" + p.title + "（難度" + p.star + "／満点" + maxOf(p) + "点）\n";
@@ -373,7 +386,7 @@ function applyResult(raw){
   const t = String(raw).normalize("NFKC");
   const m = [...t.matchAll(/結果\s*[:：]\s*([^\n]+)/g)];
   const body = m.length ? m[m.length-1][1] : t;
-  const ok = [], ng = [];
+  const ok = [], ng = [], gl = [];
   body.split(/[;；]/).map(x => x.trim()).filter(Boolean).forEach(ent => {
     const mm = ent.match(/^([A-Za-z0-9\-]+)\s*=\s*([0-9.,\s]+)$/);
     if (!mm) { ng.push("読み取れません：" + ent); return; }
@@ -390,11 +403,13 @@ function applyResult(raw){
     if (!sub) { const g = db.subs.filter(s => s.pid === p.id && s.state === "graded"); sub = g[g.length-1] || null; }
     let selfInfo = null;
     if (sub) { const old = db.results.find(r => r.sid === sub.id); if (old) selfInfo = old.src === "self" ? {score:old.score, items:old.items} : (old.self || null); db.results = db.results.filter(r => r.sid !== sub.id); }
-    db.results.push({pid:p.id, date:today(), score, max:tot, mode:"parent", src:"parent", items, sid: sub ? sub.id : null, self: selfInfo});
+    db.results.push({lap:(window.Buddy?Buddy.lap():1), pid:p.id, date:today(), score, max:tot, mode:"parent", src:"parent", items, sid: sub ? sub.id : null, self: selfInfo});
     if (sub) { sub.state = "graded"; sub.score = score; sub.max = tot; }
+    gl.push({sid: sub ? sub.id : null, pid: p.id, score, max: tot, self: selfInfo ? {score: selfInfo.score, max: tot} : null});
     ok.push(p.title + "：" + score + " / " + tot + "点");
   });
-  persist(); return {ok, ng};
+  persist(); if (window.Buddy && gl.length) Buddy.graded(gl);
+  return {ok, ng};
 }
 function inbox(keepMsg){
   title("送信・採点"); setHdr(""); showFab(false);
@@ -479,7 +494,7 @@ function review(){
 function route(){
   stopTimer(); cur = null; window.scrollTo(0,0);
   const h = location.hash.replace(/^#/,"").split("/");
-  ({"list": () => list(h[1]), "p": () => practice(h[1]), "mock": () => mockStart(h[1]), "stats": stats, "review": review, "inbox": () => inbox()}[h[0]] || home)();
+  ({"list": () => list(h[1]), "p": () => practice(h[1]), "mock": () => mockStart(h[1]), "stats": stats, "review": review, "inbox": () => inbox(), "buddy": () => Buddy.page(), "codex": () => Buddy.codex()}[h[0]] || home)();
   $("#back").classList.toggle("hide", !h[0]);
 }
 addEventListener("hashchange", route);
@@ -490,9 +505,10 @@ document.addEventListener("click", e => {
   if (e.target.id === "queue" && cur) { queueAll(); e.target.disabled = true; afterQueued(); }
   if (e.target.id === "save" && cur && !cur.saved) {
     const d = today(); let S = 0, M = 0;
-    cur.ps.forEach((p,i) => { const sub = ensureSub(i); const r = scoreOf(i); S += r.score; M += r.max; db.results.push({pid:p.id, date:d, score:r.score, max:r.max, mode:cur.mode, src:"self", items:r.items, sid:sub.id}); });
-    if (cur.mode === "mock") db.mocks.push({date:d, sub:cur.sub, score:S, max:M, pct:Math.round(S/M*100), used:cur.used});
-    persist(); cur.saved = true; e.target.disabled = true; e.target.textContent = "記録しました ✓";
+    cur.ps.forEach((p,i) => { const sub = ensureSub(i); const r = scoreOf(i); S += r.score; M += r.max; db.results.push({lap:(window.Buddy?Buddy.lap():1), pid:p.id, date:d, score:r.score, max:r.max, mode:cur.mode, src:"self", items:r.items, sid:sub.id}); });
+    if (cur.mode === "mock") db.mocks.push({date:d, sub:cur.sub, score:S, max:M, pct:Math.round(S/M*100), used:cur.used, lap:(window.Buddy?Buddy.lap():1)});
+    persist(); if (window.Buddy) Buddy.complete(cur.ps.map(p => p.id), {self:true, mock:cur.mode === "mock"});
+    cur.saved = true; e.target.disabled = true; e.target.textContent = "記録しました ✓";
     afterQueued();
   }
 });
