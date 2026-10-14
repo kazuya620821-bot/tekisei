@@ -140,17 +140,17 @@ window.BUDDY_CFG = {
     const b = B(), prof = proficiency(), evs = [], v = SUBJ.map(s => prof[s]).sort((x, y) => y - x);
     if (b.stage === 0 && b.xp >= C.hatchXp) {
       const t = decideType(b.xpSub) || "balance";
-      b.stage = 1; b.typeLock = t; b.codex[t] = b.codex[t] || todayStr(); b.maxStage[t] = 1;
+      b.stage = 1; b.typeLock = t; b.codex[t] = b.codex[t] || todayStr(); b.maxStage[t] = 1; b.forms = b.forms || {}; b.forms[t + "_1"] = b.forms[t + "_1"] || todayStr();
       evs.push({kind: "hatch", type: t}); b.evo.push({date: todayStr(), stage: 1, type: t});
     }
     if (b.stage === 1 && b.xp >= C.mid.xp && v[0] >= C.mid.top1) {
       const from = b.typeLock, t = decideType(b.xpSub) || from; b.typeLock = t;
-      b.stage = 2; b.codex[t] = b.codex[t] || todayStr(); b.maxStage[t] = Math.max(b.maxStage[t] || 0, 2);
+      b.stage = 2; b.codex[t] = b.codex[t] || todayStr(); b.maxStage[t] = Math.max(b.maxStage[t] || 0, 2); b.forms = b.forms || {}; b.forms[t + "_2"] = b.forms[t + "_2"] || todayStr();
       evs.push({kind: "stage", stage: 2, from: from, type: t}); b.evo.push({date: todayStr(), stage: 2, type: t, from: from});
     }
     if (b.stage === 2 && b.xp >= C.final.xp && v.filter(x => x >= C.final.min).length >= C.final.count && mockOk(lap())) {
       const from = b.typeLock, t = decideType(b.xpSub) || from; b.typeLock = t;
-      b.stage = 3; b.codex[t] = b.codex[t] || todayStr(); b.maxStage[t] = Math.max(b.maxStage[t] || 0, 3);
+      b.stage = 3; b.codex[t] = b.codex[t] || todayStr(); b.maxStage[t] = Math.max(b.maxStage[t] || 0, 3); b.forms = b.forms || {}; b.forms[t + "_3"] = b.forms[t + "_3"] || todayStr();
       evs.push({kind: "stage", stage: 3, from: from, type: t}); b.evo.push({date: todayStr(), stage: 3, type: t, from: from});
     }
     if (evs.length) persist();
@@ -306,6 +306,18 @@ window.BUDDY_CFG = {
   .cx .it{text-align:center;padding:10px 8px}
   .cx .it img{width:100%;height:110px;object-fit:cover;border-radius:12px}
   .cx .it.lock img{filter:brightness(0) opacity(.3)}
+  .cx2{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:12px}
+  .cx2 .it{text-align:center;padding:10px 8px}
+  .cx2 .it img,.cx2 .it .eg{display:block;margin:0 auto;height:110px;width:auto;max-width:100%;object-fit:cover;border-radius:12px}
+  .cx2 .it .eg svg{height:110px;width:auto}
+  .cx2 .it.lock img{filter:brightness(0) opacity(.3)}
+  .cx2 .it small{display:block;color:var(--sub);font-size:12px}
+  .cxrow{margin-bottom:10px}
+  .cxh{margin-bottom:6px}.cxh small{color:var(--sub);margin-left:8px;font-size:12px}
+  .cxs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .cxs .sl{text-align:center}.cxs .sl img{width:100%;height:96px;object-fit:contain;background:#eef1f6;border-radius:10px}
+  .cxs .sl.lock img{filter:brightness(0) opacity(.3)}
+  .cxs small{display:block;font-size:11px;color:var(--sub)}
   .cx .it small{display:block;color:var(--sub);margin-top:2px;font-size:12px}
   @media (prefers-reduced-motion: reduce){.bd-img,.bd-wrap svg{animation:none!important}}
   `;
@@ -413,15 +425,28 @@ window.BUDDY_CFG = {
     const p = k.split("_").map(s => SUBJN[s]);
     return p.length === 1 ? p[0] + "の経験値がほかより多い" : p.join("と") + "の経験値が同じくらい多い";
   }
+  function foundForms(b) {
+    const f = Object.assign({}, b.forms || {});
+    (b.evo || []).forEach(e => { if (e.type && e.stage) f[e.type + "_" + e.stage] = f[e.type + "_" + e.stage] || e.date; });
+    if (b.stage >= 1 && b.typeLock) f[b.typeLock + "_" + b.stage] = f[b.typeLock + "_" + b.stage] || "now";
+    return f;
+  }
   function codex() {
     title("図鑑"); setHdr(""); showFab(false);
-    const b = B();
-    const items = TYPE_ORDER.map(k => {
-      const found = !!b.codex[k], n = Math.max(1, Math.min(3, b.maxStage[k] || 1));
-      return `<div class="card it ${found ? "" : "lock"}"><img src="c_${k}_${found ? n : 1}.webp" alt="">${found ? `<b>${esc(TYPES[k].n)}</b><small>${esc(TYPES[k].l)}・${esc(STAGE_NAMES[n])}</small>` : `<b>？？？</b><small>${esc(hintOf(k))}</small>`}</div>`;
+    const b = B(), fm = foundForms(b);
+    const total = TYPE_ORDER.length * 3 + 2;
+    let got = 1 + (b.dadFound ? 1 : 0);
+    const egg = `<div class="card it"><div class="eg">${eggSVG(0.2, "normal")}</div><b>タマゴ</b><small>はじまりの姿</small></div>`;
+    const rows = TYPE_ORDER.map(k => {
+      const slots = [1, 2, 3].map(n => {
+        const ok = !!fm[k + "_" + n]; if (ok) got++;
+        return `<div class="sl ${ok ? "" : "lock"}"><img src="c_${k}_${n}.webp" alt=""><small>${STAGE_NAMES[n]}</small></div>`;
+      }).join("");
+      const any = [1, 2, 3].some(n => fm[k + "_" + n]);
+      return `<div class="card cxrow ${any ? "" : "lockrow"}"><div class="cxh">${any ? `<b>${esc(TYPES[k].n)}</b><small>${esc(TYPES[k].l)}</small>` : `<b>？？？</b><small>${esc(hintOf(k))}</small>`}</div><div class="cxs">${slots}</div></div>`;
     }).join("");
-    const dad = `<div class="card it ${b.dadFound ? "" : "lock"}"><img src="${DAD_IMG}" alt="">${b.dadFound ? `<b>おとうさん</b><small>休みが続くとあらわれる</small>` : `<b>？？？</b><small>かくれキャラ</small>`}</div>`;
-    $("#app").innerHTML = `<p class="muted">かえったキャラクターが登録されます。（見つけた ${Object.keys(b.codex).length} / ${TYPE_ORDER.length}）</p><div class="cx">${items}${dad}</div>`;
+    const dad = `<div class="card it ${b.dadFound ? "" : "lock"}"><img src="${DAD_IMG}" alt=""><b>${b.dadFound ? "おとうさん" : "？？？"}</b><small>${b.dadFound ? "休みが続くとあらわれる" : "かくれキャラ"}</small></div>`;
+    $("#app").innerHTML = `<p class="muted">出会った姿が登録されます。（見つけた ${got} / ${total}）　タマゴ1＋11種×3段階＋かくれキャラ1</p><div class="cx2">${egg}${dad}</div>${rows}`;
   }
 
   function toast(gain, kind) {
