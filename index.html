@@ -131,6 +131,15 @@ function judge(q, input){
   const s = String(input || "").trim();
   if (a.t === "multi") {
     const n = normT(s); let pos = -1;
+    const keys = a.parts.map(p => p.map(normT).join("|"));
+    if (a.ordered && new Set(keys).size < keys.length) {
+      // 同じ語が何度も出る設問（縄文／弥生など）：答えの語を前から全部ひろい、n番目どうしを比べる
+      const cand = []; a.parts.forEach((p, i) => p.forEach(x => cand.push([normT(x), keys[i]])));
+      cand.sort((x, y) => y[0].length - x[0].length);
+      const toks = []; let i = 0;
+      while (i < n.length) { const m = cand.find(c => c[0] && n.startsWith(c[0], i)); if (m) { toks.push(m[1]); i += m[0].length; } else i++; }
+      return a.parts.map((p, k) => toks[k] === keys[k]);
+    }
     return a.parts.map(p => {
       if (!s) return false;
       let best = -1;
