@@ -68,7 +68,7 @@ window.BUDDY_CFG = {
     }
     const b = db.buddy;
     if (b.v !== 2) migrate(b);
-    b.days = b.days || []; b.xpLog = b.xpLog || {}; b.codex = b.codex || {}; b.evo = b.evo || []; b.maxStage = b.maxStage || {};
+    b.days = b.days || []; b.xpLog = b.xpLog || {}; b.codex = b.codex || {}; b.evo = b.evo || []; b.maxStage = b.maxStage || {}; b.friends = b.friends || []; b.forms = b.forms || {};
     b.xpSub = b.xpSub || zero();
     return b;
   }
@@ -315,6 +315,9 @@ window.BUDDY_CFG = {
   .cxrow{margin-bottom:10px}
   .cxh{margin-bottom:6px}.cxh small{color:var(--sub);margin-left:8px;font-size:12px}
   .cxs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .bd-friends{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;text-align:center}
+  .bd-friends img{width:100%;height:80px;object-fit:contain;background:#eef1f6;border-radius:10px}
+  .bd-friends b{display:block;font-size:13px}.bd-friends small{color:var(--sub);font-size:11px}
   .cxs .sl{text-align:center}.cxs .sl img{width:100%;height:96px;object-fit:contain;background:#eef1f6;border-radius:10px}
   .cxs .sl.lock img{filter:brightness(0) opacity(.3)}
   .cxs small{display:block;font-size:11px;color:var(--sub)}
@@ -379,7 +382,7 @@ window.BUDDY_CFG = {
     let prog = "";
     if (st.state !== "dad") {
       if (nx) prog = `<div class="bar" style="margin-top:8px"><i style="width:${Math.round(nx.frac * 100)}%"></i></div><div class="bd-sub">${nx.need.length ? "次：" + esc(nx.need.join("／")) : "もうすぐ成長するよ！"}</div>`;
-      else prog = `<div class="bd-sub" style="margin-top:8px">最終進化まで育ったよ！</div>`;
+      else prog = `<div class="bd-sub" style="margin-top:8px">最終進化まで育ったよ！旅立ちもできるよ。</div>`;
     }
     return `<button class="card bd-card" data-go="#buddy">${sprite(false, f, st)}<div class="bd-info">
       <div class="bd-name">${esc(nameOf(f, st.state))}</div><div class="bd-sub">${esc(subName(f, st.state))}　経験値 ${B().xp}</div>
@@ -392,6 +395,15 @@ window.BUDDY_CFG = {
     return c;
   }
 
+  // 旅立ち：最終進化したキャラは「おともだち」として残り、新しいタマゴ（次の周）がはじまる。記録・図鑑は消えない
+  function depart() {
+    const b = B(); if (b.stage < 3 || !b.typeLock) return false;
+    b.friends = b.friends || [];
+    b.friends.push({type: b.typeLock, date: todayStr(), lap: b.lap || 1, xp: Math.round(b.xp), xpSub: Object.assign({}, b.xpSub)});
+    b.lap = (b.lap || 1) + 1;
+    b.xp = 0; b.xpSub = zero(); b.stage = 0; b.typeLock = null; b.born = todayStr(); b.lastStudy = todayStr();
+    persist(); return true;
+  }
   function page() {
     title("ルミン"); setHdr(""); showFab(false);
     const f = form(), st = status(), b = B(), nx = nextInfo(f, st.prof);
@@ -411,6 +423,8 @@ window.BUDDY_CFG = {
     <h2>経験値</h2>
     <div class="card"><div>${b.xp} <span class="muted">経験値</span>　<span class="muted">今週 ${weekCount()}日 がんばったよ</span></div>
       ${nx ? `<div class="bar" style="margin:8px 0"><i style="width:${Math.round(nx.frac * 100)}%"></i></div><div class="bd-sub">次は「${esc(nx.label)}」　${nx.need.length ? esc(nx.need.join("／")) : "条件はそろっているよ。1問やると成長するかも！"}</div>` : `<div class="bd-sub" style="margin-top:6px">最終進化まで育ちました。</div>`}</div>
+    ${f.stage === 3 ? `<h2>旅立ちのとき</h2><div class="card"><p style="margin:0 0 8px">${esc(TYPES[f.type].n)}は、りっぱに育ちました。旅立つと、${esc(TYPES[f.type].n)}は「おともだち」としてずっと残り、新しいタマゴがはじまります。</p><p class="note" style="margin:0 0 10px">記録・図鑑・解いた問題の履歴は消えません。新しい周では、同じ問題をもう一度やると、また経験値がもらえます。</p><button class="primary" id="bdDepart">旅立たせて、新しいタマゴをむかえる</button></div>` : ""}
+    ${(b.friends || []).length ? `<h2>おともだち（${b.friends.length}）</h2><div class="card"><div class="bd-friends">${b.friends.map(x => `<div><img src="c_${x.type}_3.webp" alt=""><b>${esc(TYPES[x.type].n)}</b><small>${esc(x.date)}</small></div>`).join("")}</div></div>` : ""}
     <h2>科目ごとの経験値</h2>
     <div class="card">${xrows}<p class="note" style="margin:6px 0 0">解いた問題の科目に経験値がたまります。たまごがかえるときと、進化するときに、この割合で型が決まります。</p>
       <div class="bd-sub" style="font-size:15px;color:var(--ink);margin-top:8px">${typeMsg}</div></div>
@@ -418,6 +432,8 @@ window.BUDDY_CFG = {
     <div class="card">${prow}<p class="note" style="margin:6px 0 0">解いた問題の得点率から決まります。親の採点が入ると、そちらが使われます。進化の条件に使います。</p></div>
     ${evo ? `<h2>これまでの成長</h2><div class="card"><ul style="margin:0;padding-left:20px">${evo}</ul></div>` : ""}
     <div class="row" style="margin-top:14px"><button class="primary" data-go="#codex">図鑑を見る</button></div>`;
+    const dp = document.getElementById("bdDepart");
+    if (dp) dp.onclick = () => { if (confirm(TYPES[f.type].n + "を旅立たせて、新しいタマゴをむかえますか？\n（" + TYPES[f.type].n + "は「おともだち」として残ります）")) { if (depart()) { toast(0); location.hash = "#buddy"; route(); } } };
   }
 
   function hintOf(k) {

@@ -114,7 +114,7 @@ const lastOf = pid => { const r = db.results.filter(x => x.pid === pid); return 
 const stars = n => '<span class="stars" aria-label="難度'+n+'">'+"★".repeat(n)+"☆".repeat(4-n)+'</span>';
 const pctCls = v => v >= 80 ? "good" : v >= 60 ? "mid" : "bad";
 const pct = r => Math.round(r.score / r.max * 100);
-function badge(pid){ const r = lastOf(pid); return r ? '<span class="badge '+pctCls(pct(r))+'">前回 '+r.score+'/'+r.max+'点</span>' : '<span class="badge">未着手</span>'; }
+function badge(pid){ const r = lastOf(pid); const L = window.Buddy ? Buddy.lap() : 1; return r ? '<span class="badge '+pctCls(pct(r))+'">'+((r.lap||1) < L ? "前の周 " : "前回 ")+r.score+'/'+r.max+'点</span>' : '<span class="badge">未着手</span>'; }
 const nPend = () => db.subs.filter(s => s.state === "pending").length;
 const nSent = () => db.subs.filter(s => s.state === "sent").length;
 
@@ -191,7 +191,7 @@ function home(){
 }
 
 const SUBJT = {math:"算数", science:"理科", japanese:"国語", society:"社会"};
-function cntOf(k){ const ps = P.filter(p => Buddy.subjOf(p) === k); const d = ps.filter(p => db.results.some(r => r.pid === p.id)).length; return d + " / " + ps.length + " 問 取り組み済み"; }
+function cntOf(k){ const ps = P.filter(p => Buddy.subjOf(p) === k); const L = Buddy.lap(); const d = ps.filter(p => db.results.some(r => r.pid === p.id && (r.lap || 1) === L)).length; return d + " / " + ps.length + " 問 取り組み済み"; }
 function list(sub){
   title(SUBJT[sub] || SUBN[sub]); setHdr(""); showFab(false);
   const ps = P.filter(p => SUBJT[sub] ? Buddy.subjOf(p) === sub : p.sub === sub);
