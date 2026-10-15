@@ -216,6 +216,57 @@ window.BUDDY_CFG = {
     b.xp = SUBJ.reduce((a, s) => a + b.xpSub[s], 0);
     return t;
   }
+
+  /* ---------- れんぞくスタンプ（ログインボーナス）---------- */
+  const STREAK_MILESTONES = {3: 3, 5: 5, 7: 10, 10: 10, 14: 15, 21: 20, 30: 30};
+  const STREAK_MSG = {
+    3: ["3日つづいたね！", "いい調子。この流れ、大切にしよう。"],
+    5: ["5日れんぞく！がんばってるねー！", "毎日の積み重ねが、いちばんの力になるよ。"],
+    7: ["1週間れんぞく！", "7日つづけられたのは、りっぱな力だよ。"],
+    10: ["10日れんぞく！", "もう、勉強が生活の一部になってきたね。"],
+    14: ["2週間れんぞく！", "つづける力は、入試でもきっと味方になるよ。"],
+    21: ["3週間れんぞく！", "すごい。ここまでつづいた人は、なかなかいないよ。"],
+    30: ["30日れんぞく！", "ひと月つづけた自分を、ほこりに思っていいよ。"]
+  };
+  const wkKey = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x.getFullYear() + "/" + (x.getMonth() + 1) + "/" + x.getDate(); };
+  // 勉強した日から、れんぞく日数を数える。1週間に1回だけ、1日お休みしても切れない（お休みチケット・自動）
+  function streakInfo() {
+    const b = B(), now = new Date(); now.setHours(0, 0, 0, 0);
+    const ds = Array.from(new Set(b.days)).map(dkey).filter(Boolean).sort((x, y) => x - y);
+    const used = {}; let cur = 0, best = 0, start = null, prev = null;
+    ds.forEach(d => {
+      if (!prev) { cur = 1; start = d; }
+      else {
+        const gap = daysBetween(prev, d);
+        if (gap === 1) cur++;
+        else if (gap === 2) { const m = new Date(prev); m.setDate(m.getDate() + 1); const k = wkKey(m); if (!used[k]) { used[k] = m.getTime(); cur++; } else { cur = 1; start = d; } }
+        else { cur = 1; start = d; }
+      }
+      best = Math.max(best, cur); prev = d;
+    });
+    let alive = false, ticketToday = false;
+    if (prev) {
+      const gap = daysBetween(prev, now);
+      if (gap <= 1) alive = true;
+      else if (gap === 2) { const m = new Date(prev); m.setDate(m.getDate() + 1); if (!used[wkKey(m)]) { alive = true; ticketToday = true; } }
+    }
+    const thisWk = wkKey(now);
+    const usedThisWeek = Object.keys(used).some(k => k === thisWk);
+    return {cur: alive ? cur : 0, best, start: start ? start.getFullYear() + "/" + (start.getMonth() + 1) + "/" + start.getDate() : "", alive, ticketLeft: !usedThisWeek, ticketToday, used, last: prev};
+  }
+  function weekStamps() {
+    const b = B(), info = streakInfo(), now = new Date(); now.setHours(0, 0, 0, 0);
+    const mon = new Date(now); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+    const set = new Set(b.days), usedDays = new Set(Object.values(info.used).map(t => { const d = new Date(t); return d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate(); }));
+    const nm = ["月", "火", "水", "木", "金", "土", "日"], out = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(mon); d.setDate(mon.getDate() + i);
+      const k = d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate();
+      const kk = d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
+      out.push({n: nm[i], done: set.has(k) || set.has(kk), rest: usedDays.has(k), today: d.getTime() === now.getTime(), future: d > now});
+    }
+    return out;
+  }
   function markStudy() {
     const b = B(), t = todayStr();
     b.lastStudy = t; if (!b.days.includes(t)) b.days.push(t);
@@ -236,9 +287,18 @@ window.BUDDY_CFG = {
       by[s] += g; mockSubs.push(s);
     });
     if (o.mock && mockSubs.length) mockSubs.forEach(s => { by[s] += C.xpMock / mockSubs.length; });
-    markStudy(); gain = addXp(by);
+    markStudy();
+    // れんぞくの節目ボーナス：その日に取り組んだ科目に等分して配る（型の割合をかたよらせないため）
+    let sk = null; const si = streakInfo(); b.streakAwards = b.streakAwards || {};
+    if (si.alive && STREAK_MILESTONES[si.cur] && !b.streakAwards[si.start + ":" + si.cur]) {
+      b.streakAwards[si.start + ":" + si.cur] = t;
+      const bonus = STREAK_MILESTONES[si.cur], tgt = SUBJ.filter(x => by[x] > 0), list = tgt.length ? tgt : SUBJ;
+      list.forEach(x => { by[x] += bonus / list.length; });
+      sk = {n: si.cur, bonus: bonus};
+    }
+    gain = addXp(by);
     persist();
-    afterEvent(gain, "completed");
+    afterEvent(gain, "completed", sk);
     return gain;
   }
   // 親の採点が入った。list: [{sid, pid, score, max, self:{score,max}|null}]
@@ -254,15 +314,72 @@ window.BUDDY_CFG = {
       by[subjOf(byId(g.pid))] += x;
     });
     const gain = addXp(by); persist();
-    afterEvent(gain, "graded");
+    let sc = 0, mx = 0; list.forEach(g => { if (g.max) { sc += g.score; mx += g.max; } });
+    const rw = gain > 0 && mx > 0 ? {score: sc, max: mx, pct: sc / mx * 100} : null;
+    afterEvent(gain, "graded", null, rw);
     return gain;
   }
 
-  function afterEvent(gain, kind) {
+  function afterEvent(gain, kind, sk, rw) {
     happyUntil = Date.now() + 6000;
     const evs = evaluate();
+    const showEvo = () => { if (evs.length) setTimeout(() => evoOverlay(evs), 400); };
+    const showStreak = () => { if (sk) streakOverlay(sk, showEvo); else showEvo(); };
+    if (rw) { setTimeout(() => rewardOverlay(rw, gain, showStreak), 500); return; }
     toast(gain, kind);
-    if (evs.length) setTimeout(() => evoOverlay(evs), 700);
+    if (sk) setTimeout(() => streakOverlay(sk, showEvo), 700); else showEvo();
+  }
+  function streakOverlay(sk, done) {
+    const m = STREAK_MSG[sk.n] || [sk.n + "日れんぞく！", "すごいね。"];
+    const o = document.createElement("div"); o.className = "bd-evo"; document.body.appendChild(o);
+    o.innerHTML = `<div class="box"><div class="bd-stamp">${sk.n}<small>日</small></div><h2>${esc(m[0])}</h2><p>${esc(m[1])}</p><p class="bd-sub">ボーナス経験値 +${sk.bonus}</p><button class="primary" id="bdOk">やったー！</button></div>`;
+    o.querySelector("#bdOk").onclick = () => { o.remove(); if (done) done(); };
+  }
+
+  /* ---------- ごほうび（親の採点が入ったとき）---------- */
+  const REWARD = [
+    {min: 80, head: ["ぜんぶ たしかめた力、光ってるよ", "考えぬいた分だけ、ちゃんと点になったね", "いまの力、かなり本物だよ"], msg: ["むずかしい問題にも、あきらめずに向きあえたね。この調子で、つぎも進もう。", "できた問題は、人に説明できるくらいまで理解を深めると、もっと強くなるよ。"], title: "すばらしい！"},
+    {min: 60, head: ["あと一歩のところまで来たよ", "できたところが、ちゃんと増えてるよ", "おしい問題が、伸びしろだよ"], msg: ["できた点を、まず自分でほめよう。まちがえた問題をもう一度やると、ぐんと伸びるよ。", "考え方があっていた問題も多いよ。まちがえた問題を、もう一度ためしてみよう。"], title: "いい調子！", review: true},
+    {min: 30, head: ["今日も 机に向かえたのが すごい", "やってみたことが、いちばん大事だよ", "むずかしい問題は、伸びるチャンス"], msg: ["どこでつまずいたかが分かれば、次は必ず強くなるよ。ひとつだけ、ふり返ってみよう。", "点数より、取り組んだことがえらいよ。まちがえた問題は、ゆっくり見直せば大丈夫。"], title: "やってみたね！", review: true},
+    {min: 0, head: ["やれやれ、パパを頼りなさい"], msg: ["どこでつまずいたか、いっしょに見てみよう。ひとりで悩まなくて大丈夫だよ。"], title: "パパの出番！", review: true, papa: true}
+  ];
+  function rewardOf(pct) { return REWARD.find(r => pct >= r.min) || REWARD[REWARD.length - 1]; }
+  /* ごほうび画像：この端末(IndexedDB)だけに保存。公開リポジトリには入れない */
+  const RKEYS = [["rw_80", "80％以上"], ["rw_60", "60〜79％"], ["rw_30", "30〜59％"], ["rw_0", "29％以下（パパ）"]];
+  function idb() { return new Promise((ok, ng) => { const q = indexedDB.open("tekisei_img", 1); q.onupgradeneeded = () => q.result.createObjectStore("img"); q.onsuccess = () => ok(q.result); q.onerror = () => ng(q.error); }); }
+  function idbGet(k) { return idb().then(d => new Promise(ok => { const q = d.transaction("img").objectStore("img").get(k); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); })).catch(() => null); }
+  function idbSet(k, v) { return idb().then(d => new Promise((ok, ng) => { const t = d.transaction("img", "readwrite"); if (v) t.objectStore("img").put(v, k); else t.objectStore("img").delete(k); t.oncomplete = ok; t.onerror = () => ng(t.error); })); }
+  function shrink(file) { return new Promise((ok, ng) => { const u = URL.createObjectURL(file), i = new Image(); i.onload = () => { const m = 900, k = Math.min(1, m / Math.max(i.width, i.height)), c = document.createElement("canvas"); c.width = Math.round(i.width * k); c.height = Math.round(i.height * k); c.getContext("2d").drawImage(i, 0, 0, c.width, c.height); URL.revokeObjectURL(u); c.toBlob(b => b ? ok(b) : ng(new Error("x")), "image/jpeg", 0.88); }; i.onerror = () => ng(new Error("img")); i.src = u; }); }
+  function rkey(r) { return r.min >= 80 ? "rw_80" : r.min >= 60 ? "rw_60" : r.min >= 30 ? "rw_30" : "rw_0"; }
+  function rewardSettings() {
+    const host = document.getElementById("rwSet"); if (!host) return;
+    host.innerHTML = RKEYS.map(([k, n]) => `<div class="bd-rwrow" data-k="${k}"><div class="th">?</div><div><b>${n}</b><br><label class="rwb">えらぶ<input type="file" accept="image/*" hidden></label> <button class="ghost rwx">もどす</button></div></div>`).join("");
+    host.querySelectorAll(".bd-rwrow").forEach(row => {
+      const k = row.dataset.k, th = row.querySelector(".th");
+      const show = () => idbGet(k).then(b => { th.innerHTML = b ? `<img src="${URL.createObjectURL(b)}" alt="">` : (k === "rw_0" ? `<img src="reward_papa.webp" alt="">` : "なし"); });
+      show();
+      row.querySelector("input").onchange = e => { const f = e.target.files[0]; if (!f) return; shrink(f).then(b => idbSet(k, b)).then(show).catch(() => alert("画像を読みこめませんでした")); };
+      row.querySelector(".rwx").onclick = () => idbSet(k, null).then(show);
+    });
+  }
+  const pickR = a => a[Math.floor(Math.random() * a.length)];
+  function rewardOverlay(rw, gain, done) {
+    const r = rewardOf(rw.pct), f = form(), st = status();
+    const pic = r.papa
+      ? `<div class="bd-wrap big"><img class="bd-img" alt="" src="reward_papa.webp" onerror="this.onerror=null;this.src='${DAD_IMG}'"></div>`
+      : sprite(true, f, {state: "happy"});
+    const k = rkey(r);
+    const o = document.createElement("div"); o.className = "bd-evo"; document.body.appendChild(o);
+    const si = streakInfo();
+    o.innerHTML = `<div class="box"><div class="bd-sub">親の採点が入りました</div>${pic}
+      <div class="bd-rscore"><b>${Math.round(rw.score)}</b>点 <span>／ ${Math.round(rw.max)}点（${Math.round(rw.pct)}％）</span>　<em>${esc(r.title)}</em></div>
+      <div class="bd-rmsg"><b>${esc(pickR(r.head))}</b><p>${esc(pickR(r.msg))}</p><div class="bd-from">おうえん：てきせいトレーニング</div></div>
+      <div class="bd-rxp">経験値 +${Math.round(gain)}${si.cur ? "　／　れんぞく " + si.cur + "日め" : ""}</div>
+      <div class="row" style="justify-content:center;gap:10px;margin-top:12px">${r.review ? '<button id="bdRv">まちがえた問題を見る</button>' : ""}<button class="primary" id="bdOk">つぎへ</button></div></div>`;
+    idbGet(k).then(b => { if (!b) return; const w = o.querySelector(".bd-wrap, .bd-big, svg"); const el = document.createElement("div"); el.className = "bd-photo"; el.innerHTML = '<img alt="">'; el.firstChild.src = URL.createObjectURL(b); const old = o.querySelector(".bd-wrap"); if (old) old.replaceWith(el); else o.querySelector(".box").insertBefore(el, o.querySelector(".bd-rscore")); });
+    const close = go => { o.remove(); if (go) location.hash = "#review"; if (done) done(); };
+    o.querySelector("#bdOk").onclick = () => close(false);
+    const rv = o.querySelector("#bdRv"); if (rv) rv.onclick = () => close(true);
   }
 
   /* ---------- 表示 ---------- */
@@ -297,6 +414,13 @@ window.BUDDY_CFG = {
   .bd-big{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
   .bd-evo{position:fixed;inset:0;z-index:60;background:rgba(10,15,30,.78);display:flex;align-items:center;justify-content:center;padding:20px}
   .bd-evo .box{background:var(--card);border-radius:22px;padding:22px 24px;max-width:460px;width:100%;text-align:center}
+  .bd-stamp{width:96px;height:96px;margin:0 auto 8px;border-radius:50%;background:#e08e1e;color:#fff;font-size:44px;font-weight:800;display:flex;align-items:baseline;justify-content:center;padding-top:20px;box-sizing:border-box;box-shadow:0 4px 14px rgba(0,0,0,.25)}.bd-stamp small{font-size:18px;margin-left:2px}
+  .bd-rscore{margin:10px 0 6px;font-size:15px}.bd-rscore b{font-size:34px;color:var(--pri,#1d4f91)}.bd-rscore span{color:var(--sub)}.bd-rscore em{font-style:normal;font-weight:800}
+  .bd-rmsg{text-align:left;background:var(--bg,#f5f7fb);border-left:6px solid #e08e1e;border-radius:14px;padding:12px 14px}.bd-rmsg b{display:block;font-size:18px;margin-bottom:4px}.bd-rmsg p{margin:0;font-size:14px;line-height:1.6}.bd-from{margin-top:6px;font-size:11px;color:var(--sub);text-align:right}
+  .bd-photo{display:flex;justify-content:center;margin:6px 0}.bd-photo img{max-height:300px;max-width:100%;border-radius:16px;box-shadow:0 3px 10px rgba(0,0,0,.25)}
+  .bd-rwrow{display:flex;gap:12px;align-items:center;margin:8px 0}.bd-rwrow .th{width:64px;height:84px;border-radius:10px;background:var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--sub);font-size:12px;flex:none}.bd-rwrow .th img{width:100%;height:100%;object-fit:cover}.rwb{display:inline-block;padding:6px 14px;border:1px solid var(--line);border-radius:10px;font-weight:700;cursor:pointer}
+  .bd-rxp{margin-top:10px;background:#e8eefb;border-radius:12px;padding:8px 12px;font-size:14px}
+  .bd-week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center}.bd-week div{border-radius:12px;padding:8px 0;background:#e8ecf3;font-size:13px;color:#68738a}.bd-week .d{background:#e08e1e;color:#fff;font-weight:800}.bd-week .r{background:#cfe0f5;color:#1d4f91}.bd-week .t{outline:2px solid #1d4f91}
   .bd-evo h2{margin:0 0 6px;font-size:22px}
   .bd-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:55;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:8px 16px 8px 8px;display:flex;align-items:center;gap:10px;box-shadow:0 6px 24px rgba(0,0,0,.25);font-weight:700;animation:bdIn .35s ease-out}
   .bd-toast img{width:64px;height:52px;object-fit:cover;border-radius:10px}
@@ -385,7 +509,7 @@ window.BUDDY_CFG = {
       else prog = `<div class="bd-sub" style="margin-top:8px">最終進化まで育ったよ！旅立ちもできるよ。</div>`;
     }
     return `<button class="card bd-card" data-go="#buddy">${sprite(false, f, st)}<div class="bd-info">
-      <div class="bd-name">${esc(nameOf(f, st.state))}</div><div class="bd-sub">${esc(subName(f, st.state))}　経験値 ${B().xp}</div>
+      <div class="bd-name">${esc(nameOf(f, st.state))}</div><div class="bd-sub">${esc(subName(f, st.state))}　経験値 ${B().xp}${streakInfo().cur >= 2 ? "　れんぞく " + streakInfo().cur + "日" : ""}</div>
       <div class="bd-say">${esc(line(st, f))}</div>${prog}</div></button>`;
   }
 
@@ -420,6 +544,8 @@ window.BUDDY_CFG = {
     <div class="card bd-big">${sprite(true, f, st)}
       <div class="bd-name">${esc(nameOf(f, st.state))}</div><div class="bd-sub">${esc(subName(f, st.state))}</div>
       <div class="bd-say">${esc(line(st, f))}</div></div>
+    <h2>れんぞくスタンプ</h2>
+    <div class="card"><div class="bd-week">${weekStamps().map(x => `<div class="${x.done ? "d" : x.rest ? "r" : ""} ${x.today ? "t" : ""}">${x.n}<br>${x.done ? "✔" : x.rest ? "休" : "・"}</div>`).join("")}</div><div class="bd-sub" style="margin-top:8px">いま <b>${streakInfo().cur}</b> 日れんぞく　／　さいこう ${streakInfo().best} 日　／　お休みチケット：${streakInfo().ticketLeft ? "今週は 1回つかえるよ" : "今週は つかったよ"}</div><p class="note" style="margin:6px 0 0">問題を1つ記録した日に、スタンプがつきます。3・5・7・10・14・21・30日で、ボーナス経験値。1日休んでも、週に1回は つづきます。とぎれても、経験値は へりません。</p></div>
     <h2>経験値</h2>
     <div class="card"><div>${b.xp} <span class="muted">経験値</span>　<span class="muted">今週 ${weekCount()}日 がんばったよ</span></div>
       ${nx ? `<div class="bar" style="margin:8px 0"><i style="width:${Math.round(nx.frac * 100)}%"></i></div><div class="bd-sub">次は「${esc(nx.label)}」　${nx.need.length ? esc(nx.need.join("／")) : "条件はそろっているよ。1問やると成長するかも！"}</div>` : `<div class="bd-sub" style="margin-top:6px">最終進化まで育ちました。</div>`}</div>
@@ -431,7 +557,14 @@ window.BUDDY_CFG = {
     <h2>科目ごとの習熟度（100点満点）</h2>
     <div class="card">${prow}<p class="note" style="margin:6px 0 0">解いた問題の得点率から決まります。親の採点が入ると、そちらが使われます。進化の条件に使います。</p></div>
     ${evo ? `<h2>これまでの成長</h2><div class="card"><ul style="margin:0;padding-left:20px">${evo}</ul></div>` : ""}
-    <div class="row" style="margin-top:14px"><button class="primary" data-go="#codex">図鑑を見る</button></div>`;
+    <div class="row" style="margin-top:14px"><button class="primary" data-go="#codex">図鑑を見る</button></div>
+    <div id="rwBox"></div>
+    <div id="rwTap" style="text-align:center;margin:26px 0 8px;font-size:11px;color:var(--sub);opacity:.45;user-select:none;-webkit-user-select:none">てきせいトレーニング</div>`;
+    (function () {
+      const box = document.getElementById("rwBox"), tap = document.getElementById("rwTap"); let n = 0, t0 = 0;
+      const open = () => { box.innerHTML = `<h2>ごほうび画像の設定（保護者用）</h2><div class="card"><p class="note" style="margin:0 0 6px">点数ごとに出す画像を、この端末の写真から選べます（この端末の中だけに保存され、ネットには出ません）。選ばない場合は、キャラクターが出ます。</p><div id="rwSet"></div><div class="row" style="margin-top:10px"><button id="rwHide">この設定をかくす</button></div></div>`; rewardSettings(); document.getElementById("rwHide").onclick = () => { box.innerHTML = ""; }; box.scrollIntoView({behavior: "smooth", block: "center"}); };
+      tap.onclick = () => { const now = Date.now(); if (now - t0 > 3000) n = 0; t0 = now; if (++n >= 5) { n = 0; open(); } };
+    })();
     const dp = document.getElementById("bdDepart");
     if (dp) dp.onclick = () => { if (confirm(TYPES[f.type].n + "を旅立たせて、新しいタマゴをむかえますか？\n（" + TYPES[f.type].n + "は「おともだち」として残ります）")) { if (depart()) { toast(0); location.hash = "#buddy"; route(); } } };
   }
@@ -495,6 +628,6 @@ window.BUDDY_CFG = {
   }
 
   function check() { const evs = evaluate(); if (evs.length) setTimeout(() => evoOverlay(evs), 500); }
-  window.Buddy = {check, init, card, page, codex, complete, graded, status, form, proficiency, subjOf, lap, evaluate, decideType, TYPES, SUBJ, SUBJN};
+  window.Buddy = {rewardOverlay, check, init, card, page, codex, complete, graded, status, form, proficiency, subjOf, lap, evaluate, decideType, TYPES, SUBJ, SUBJN};
   try { init(); } catch (e) {}
 })();
