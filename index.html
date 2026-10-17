@@ -125,16 +125,19 @@ function title(t){ $("#ttl").textContent = t; document.title = t + "｜適性検
 function showFab(on){ $("#fab").classList.toggle("hide", !on); if (!on) $("#pad").classList.remove("open"); }
 
 /* ---------- 自動判定（数字・短い答えだけ。仮判定） ---------- */
-const normT = s => String(s).normalize("NFKC").toLowerCase().replace(/[\s　、。，．・「」『』（）()→―\-,.]/g, "");
+const normT = s => String(s).normalize("NFKC").toLowerCase().replace(/[\s　、。，．・「」『』（）()→―\-,.\u200b-\u200d\ufeff]/g, "").normalize("NFKC");
+const fold1 = c => c.replace(/[ァ-ヶ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60)).replace(/[ぁぃぅぇぉ]/g, ch => "あいうえお"["ぁぃぅぇぉ".indexOf(ch)]).replace("工", "え").replace("夕", "た");
 function judge(q, input){
   const a = q.auto; if (!a) return null;
   const s = String(input || "").trim();
   if (a.t === "multi") {
-    const n = normT(s); let pos = -1;
-    const keys = a.parts.map(p => p.map(normT).join("|"));
+    const single = a.parts.every(p => p.every(x => normT(x).length === 1)) && normT(s).length <= a.parts.length * 2;   // ア〜エだけを並べる設問
+    const nz = single ? (x => fold1(normT(x))) : normT;
+    const n = nz(s); let pos = -1;
+    const keys = a.parts.map(p => p.map(nz).join("|"));
     if (a.ordered && new Set(keys).size < keys.length) {
       // 同じ語が何度も出る設問（縄文／弥生など）：答えの語を前から全部ひろい、n番目どうしを比べる
-      const cand = []; a.parts.forEach((p, i) => p.forEach(x => cand.push([normT(x), keys[i]])));
+      const cand = []; a.parts.forEach((p, i) => p.forEach(x => cand.push([nz(x), keys[i]])));
       cand.sort((x, y) => y[0].length - x[0].length);
       const toks = []; let i = 0;
       while (i < n.length) { const m = cand.find(c => c[0] && n.startsWith(c[0], i)); if (m) { toks.push(m[1]); i += m[0].length; } else i++; }
@@ -143,7 +146,7 @@ function judge(q, input){
     return a.parts.map(p => {
       if (!s) return false;
       let best = -1;
-      for (const x of p) { const i = n.indexOf(normT(x), a.ordered ? pos + 1 : 0); if (i >= 0 && (best < 0 || i < best)) best = i; }
+      for (const x of p) { const i = n.indexOf(nz(x), a.ordered ? pos + 1 : 0); if (i >= 0 && (best < 0 || i < best)) best = i; }
       if (best >= 0) { if (a.ordered) pos = best; return true; }
       return false;
     });
@@ -151,6 +154,8 @@ function judge(q, input){
   if (!s) return false;
   if (a.t === "num") { const m = s.normalize("NFKC").replace(/,/g, "").replace(/(?:cm|㎝|m|ｍ|km|g|kg|L|l|mL|ml|円|個|人|度|分|秒|時間|枚|本|冊|点|倍|％|%)[2２3３²³]?/g, "").match(/-?\d+(?:\.\d+)?/g); return !!m && Math.abs(parseFloat(m[m.length-1]) - a.v) < 1e-9; }
   const n = normT(s);
+  // 記号（ア〜エ）1文字の答え：ひらがな・小さい文字・似た漢字もゆるして正解にする
+  if (n.length === 1 && (a.t === "text" || a.t === "has") && a.ok.some(x => normT(x).length === 1 && fold1(normT(x)) === fold1(n))) return true;
   if (a.t === "text") return a.ok.some(x => normT(x) === n);
   if (a.t === "has") return a.ok.some(x => n.includes(normT(x)));
   return null;

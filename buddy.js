@@ -529,8 +529,8 @@ window.BUDDY_CFG = {
     persist(); return true;
   }
   function page() {
-    title("ルミン"); setHdr(""); showFab(false);
     const f = form(), st = status(), b = B(), nx = nextInfo(f, st.prof);
+    title(nameOf(f, st.state)); setHdr(""); showFab(false);
     const mx = Math.max(1, Math.max.apply(null, SUBJ.map(s => b.xpSub[s] || 0)));
     const tot = Math.max(1, b.xp);
     const xrows = SUBJ.map(s => `<div class="bd-row"><b>${SUBJN[s]}</b><div class="bar sx"><i style="width:${Math.round((b.xpSub[s] || 0) / mx * 100)}%"></i></div><span>${Math.round(b.xpSub[s] || 0)}（${Math.round((b.xpSub[s] || 0) / tot * 100)}%）</span></div>`).join("");
