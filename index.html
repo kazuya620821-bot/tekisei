@@ -190,10 +190,11 @@ function home(){
   <h2>振り返り</h2>
   <div class="grid">
     <button class="card tile" data-go="#review"><b>復習リスト</b><span>点が取れなかった問題をもう一度</span></button>
-    <button class="card tile" data-go="#weak"><b>得意・不得意</b><span>のびしろを見つけて、つぎの練習へ</span></button>
-    <button class="card tile" data-go="#stats"><b>成績</b><span>${n}回分の記録</span></button>
   </div>
-  <p class="note" style="margin-top:28px">記録はこのiPadの中だけに保存されます。ブラウザのデータを消すと記録も消えます。</p>`;
+  <p class="note" id="homeNote" style="margin-top:28px;user-select:none;-webkit-user-select:none">記録はこのiPadの中だけに保存されます。ブラウザのデータを消すと記録も消えます。</p><div id="parentBox"></div>`;
+  // 保護者メニュー：この注意書きを3秒以内に5回タップすると出る（子どもの目にふれにくくする）
+  let tn = 0, t0 = 0;
+  $("#homeNote").onclick = () => { const now = Date.now(); if (now - t0 > 3000) tn = 0; t0 = now; if (++tn >= 5) { tn = 0; window.__parent = true; $("#parentBox").innerHTML = `<h2>保護者メニュー</h2><div class="grid"><button class="card tile" data-go="#weak"><b>得意・不得意</b><span>分野ごとの得点率</span></button><button class="card tile" data-go="#stats"><b>成績</b><span>${n}回分の記録</span></button></div><div class="row" style="margin-top:8px"><button id="parentHide">メニューをとじる</button></div>`; $("#parentHide").onclick = () => { window.__parent = false; $("#parentBox").innerHTML = ""; }; $("#parentBox").scrollIntoView({behavior:"smooth", block:"center"}); } };
 }
 
 const SUBJT = {math:"算数", science:"理科", japanese:"国語", society:"社会"};
@@ -560,6 +561,7 @@ function review(){
 function route(){
   stopTimer(); cur = null; window.scrollTo(0,0);
   const h = location.hash.replace(/^#/,"").split("/");
+  if (h[0] === "weak" || h[0] === "stats") { if (!window.__parent) { location.hash = ""; return; } } else window.__parent = false;
   ({"list": () => list(h[1]), "p": () => practice(h[1]), "mock": () => mockStart(h[1]), "stats": stats, "weak": weak, "review": review, "inbox": () => inbox(), "buddy": () => Buddy.page(), "codex": () => Buddy.codex()}[h[0]] || home)();
   $("#back").classList.toggle("hide", !h[0]);
 }
