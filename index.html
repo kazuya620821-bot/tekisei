@@ -190,6 +190,7 @@ function home(){
   <h2>振り返り</h2>
   <div class="grid">
     <button class="card tile" data-go="#review"><b>復習リスト</b><span>点が取れなかった問題をもう一度</span></button>
+    <button class="card tile" data-go="#weak"><b>得意・不得意</b><span>のびしろを見つけて、つぎの練習へ</span></button>
     <button class="card tile" data-go="#stats"><b>成績</b><span>${n}回分の記録</span></button>
   </div>
   <p class="note" style="margin-top:28px">記録はこのiPadの中だけに保存されます。ブラウザのデータを消すと記録も消えます。</p>`;
@@ -492,6 +493,57 @@ function stats(){
   $("#rst").onclick = () => { if (confirm("記録を全部消します。元に戻せません。よろしいですか？")) { db = {results:[], mocks:[], subs:[]}; persist(); stats(); } };
 }
 
+
+/* ---------- 弱点分析（分野ごと） ---------- */
+const FIELD = {M1:"回路・スイッチ",M3:"条件整理・場合の数",M8:"条件整理・場合の数",M4:"割合・割引・利益",M5:"割合・割引・利益",M6:"仕事算・旅人算",M7:"規則性・暗号",M9:"図形（等積変形）",M10:"平均・濃度",M11:"比例・反比例の説明",M12:"立体",M13:"立体",M14:"グラフの読み取り",
+  S1:"空気・水・温度と体積",S2:"流れる水・地層",S3:"植物・だ液の実験",S4:"太陽・光電池",S5:"熱の伝わり方",S6:"水溶液",S7:"電磁石",S8:"月・星",S9:"てこ",S10:"仮説と検証",
+  J1:"語句",J2:"語句",J3:"読解・要約",J4:"読解・要約",J5:"物語文・たとえ話",J6:"資料から考えを書く",W1:"作文（選んで書く）",W2:"作文（提案）",
+  C1:"地理",C2:"資料の読み取り",C3:"防災",C4:"産業・地域",C5:"歴史",C6:"持続可能な社会"};
+const fieldOf = p => FIELD[String(p.pat).split("・")[0]] || p.unit;
+function weakData(){
+  const F = {};
+  P.forEach(p => {
+    const sj = Buddy.subjOf(p), name = fieldOf(p), k = sj + "|" + name;
+    const f = F[k] = F[k] || {sj, name, total:0, done:0, s:0, m:0, ps:[]};
+    f.total++; f.ps.push(p);
+    const r = lastOf(p.id); if (r) { f.done++; f.s += r.score; f.m += r.max; }
+  });
+  return Object.values(F);
+}
+function weakText(){
+  const F = weakData(); let t = "【適性検査アプリ 弱点分析】" + today() + "\n（各分野：直近の得点÷配点。解いた数／全問題数）\n";
+  Object.keys(SUBJT).forEach(sj => {
+    const rows = F.filter(f => f.sj === sj && f.done); if (!rows.length) return;
+    t += "\n■" + SUBJT[sj] + "\n";
+    rows.sort((a, b) => a.s / a.m - b.s / b.m).forEach(f => { t += "・" + f.name + "：" + Math.round(f.s / f.m * 100) + "％（" + f.done + "／" + f.total + "問）\n"; });
+  });
+  t += "\n【点を落とした小問（直近の結果で満点でないもの）】\n"; let c = 0;
+  P.forEach(p => { const r = lastOf(p.id); if (!r || c >= 40) return; p.qs.forEach((q, i) => { const m = qMax(q), g = (r.items || [])[i] || 0; if (m && g < m && c < 40) { c++; t += "- " + p.id + "「" + p.title + "」" + fieldOf(p) + " 問" + (i + 1) + "：" + g + "／" + m + "点　採点基準：" + (q.rubric || []).map(x => x[0].replace(/（.*?）/g, "")).join("／").slice(0, 120) + "\n"; } }); });
+  return t + "\nこの結果をもとに、苦手分野の類題（型は同じで数字や場面を変えたもの）を作ってください。\n";
+}
+function weak(){
+  title("得意・不得意"); setHdr(""); showFab(false);
+  const F = weakData(), lvl = f => { const v = Math.round(f.s / f.m * 100); return f.done >= 2 ? (v >= 80 ? ["good", "得意"] : v >= 60 ? ["mid", "もう少し"] : ["bad", "のびしろ"]) : ["na", "参考"]; };
+  let h = "", any = false;
+  Object.keys(SUBJT).forEach(sj => {
+    const rows = F.filter(f => f.sj === sj);
+    h += '<h2>' + SUBJT[sj] + '</h2><div class="card">';
+    rows.sort((a, b) => (a.done ? a.s / a.m : 2) - (b.done ? b.s / b.m : 2)).forEach(f => {
+      if (!f.done) { h += `<div class="row" style="margin:6px 0"><span>${esc(f.name)}</span><span class="spacer"></span><span class="muted">未挑戦（${f.total}問）</span></div>`; return; }
+      any = true; const v = Math.round(f.s / f.m * 100), L = lvl(f);
+      h += `<div style="margin:8px 0"><div class="row"><b>${esc(f.name)}</b><span class="spacer"></span><span class="badge ${L[0] === "na" ? "" : L[0]}">${L[1]}　${v}％</span><span class="muted" style="margin-left:8px">${f.done}/${f.total}問</span></div><div class="bar"><i style="width:${v}%"></i></div></div>`;
+    });
+    h += '</div>';
+  });
+  const wk = F.filter(f => f.done >= 2 && f.s / f.m < 0.7).sort((a, b) => a.s / a.m - b.s / b.m).slice(0, 3);
+  let rec = "";
+  wk.forEach(f => { const ps = f.ps.filter(p => { const r = lastOf(p.id); return !r || pct(r) < 70; }).slice(0, 4); if (ps.length) rec += `<h3 style="margin:12px 0 4px">${SUBJT[f.sj]}：${esc(f.name)}</h3>` + ps.map(p => `<button class="card item" data-go="#p/${p.id}"><span class="t"><b>${esc(p.title)}</b><br><span class="muted">${esc(p.unit)}</span></span>${stars(p.star)}${badge(p.id)}</button>`).join(""); });
+  h = (any ? "" : '<div class="card">まだ記録が少ないので、問題を解くと、ここに得意・不得意が出ます。</div>') + (rec ? '<h2>つぎにやるなら</h2>' + rec : "") + h;
+  h += '<h2>保護者の方へ</h2><div class="card"><p class="note" style="margin:0 0 8px">1つの分野で2問以上解くと「得意／のびしろ」を表示します（1問だけは「参考」）。下のボタンで成績の文章をコピーできます。Claudeに貼ると、苦手分野の類題づくりに使えます。</p><div class="row"><button id="wcopy" class="primary">成績をコピー</button></div><textarea id="wtxt" readonly style="width:100%;height:120px;margin-top:8px;display:none"></textarea></div>';
+  $("#app").innerHTML = h;
+  $("#wcopy").onclick = async () => { const t = weakText(); try { await navigator.clipboard.writeText(t); $("#wcopy").textContent = "コピーしました ✓"; } catch (e) { const a = $("#wtxt"); a.value = t; a.style.display = "block"; a.select(); $("#wcopy").textContent = "下の文章をコピーしてください"; } };
+}
+
 function review(){
   title("復習リスト"); setHdr(""); showFab(false);
   const rows = P.map(p => ({p, r:lastOf(p.id)})).filter(x => x.r && pct(x.r) < 70).sort((a,b) => pct(a.r) - pct(b.r));
@@ -508,7 +560,7 @@ function review(){
 function route(){
   stopTimer(); cur = null; window.scrollTo(0,0);
   const h = location.hash.replace(/^#/,"").split("/");
-  ({"list": () => list(h[1]), "p": () => practice(h[1]), "mock": () => mockStart(h[1]), "stats": stats, "review": review, "inbox": () => inbox(), "buddy": () => Buddy.page(), "codex": () => Buddy.codex()}[h[0]] || home)();
+  ({"list": () => list(h[1]), "p": () => practice(h[1]), "mock": () => mockStart(h[1]), "stats": stats, "weak": weak, "review": review, "inbox": () => inbox(), "buddy": () => Buddy.page(), "codex": () => Buddy.codex()}[h[0]] || home)();
   $("#back").classList.toggle("hide", !h[0]);
 }
 addEventListener("hashchange", route);
