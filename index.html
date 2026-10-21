@@ -562,7 +562,7 @@ function route(){
   stopTimer(); cur = null; window.scrollTo(0,0);
   const h = location.hash.replace(/^#/,"").split("/");
   if (h[0] === "weak" || h[0] === "stats") { if (!window.__parent) { location.hash = ""; return; } } else window.__parent = false;
-  ({"list": () => list(h[1]), "p": () => practice(h[1]), "mock": () => mockStart(h[1]), "stats": stats, "weak": weak, "review": review, "inbox": () => inbox(), "buddy": () => Buddy.page(), "codex": () => Buddy.codex()}[h[0]] || home)();
+  ({"list": () => list(h[1]), "p": () => practice(h[1]), "mock": () => mockStart(h[1]), "stats": stats, "weak": weak, "review": review, "inbox": () => inbox(), "buddy": () => Buddy.page(), "boss": () => Buddy.boss(), "codex": () => Buddy.codex()}[h[0]] || home)();
   $("#back").classList.toggle("hide", !h[0]);
 }
 addEventListener("hashchange", route);
