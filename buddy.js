@@ -1001,7 +1001,7 @@ window.BUDDY_CFG = {
   css2.textContent = `
   .bb-name{font-size:20px;font-weight:800;margin-bottom:6px}
   .bb-appear{display:flex;justify-content:center;margin:6px 0 10px}
-  .bb-img{max-width:100%;max-height:42vh;border-radius:16px;box-shadow:0 3px 12px rgba(0,0,0,.3)}
+  .bb-img{max-width:100%;max-height:42vh;border-radius:16px;filter:drop-shadow(0 3px 10px rgba(0,0,0,.35))}
   .bb-appear .bb-img{animation:bbPop .6s ease-out}
   .bb-down{animation:bbDown 1.2s ease-in forwards}
   .bb-descend .bb-img{animation:bbDescend 2.4s ease-out}
