@@ -852,7 +852,7 @@ window.BUDDY_CFG = {
       const fixMe = () => { const im = o.querySelector("img.bb-me"); if (im) fixImg(im, spriteSrc(f, "normal")); };
       o.innerHTML = `<div class="bb-bt" style="--c1:${cols[0]};--c2:${cols[cols.length - 1]}">
         <div class="bb-top"><b>${esc(bo.n)}</b><span class="bb-hp">${[0, 1, 2, 3, 4].map(() => "<i></i>").join("")}</span>${dev ? '<span class="bb-dev">DEV</span>' : ""}<button id="bbMute" class="ghost" style="color:#fff">${muted ? "🔇" : "🔊"}</button></div>
-        <div class="bb-stage"><div class="bb-bgfx"></div><img class="bb-boss" alt="" draggable="false" src="${bo.img}"><img class="bb-fx" alt="" draggable="false" src="fx_fight.webp">${me}<div class="bb-pop"></div><div class="bb-flashfx"></div><div class="bb-cutlayer"></div></div>
+        <div class="bb-stage${id === "god" ? " god" : ""}"><div class="bb-bgfx"></div><img class="bb-boss" alt="" draggable="false" src="${bo.img}"><img class="bb-fx" alt="" draggable="false" src="fx_fight.webp">${me}<div class="bb-pop"></div><div class="bb-flashfx"></div><div class="bb-cutlayer"></div></div>
         <div class="bb-panel"><div class="bb-msg" id="bbMsg">「${esc(bo.appear)}」</div>
         <div class="bb-dots">${ATK.map((a, i) => `<span data-i="${i}">${a[0]}</span>`).join("")}</div>
         <div class="row" style="justify-content:center;margin-top:10px"><button class="primary bb-atk" id="bbAtk"></button></div></div></div>`;
@@ -1037,6 +1037,11 @@ window.BUDDY_CFG = {
   .bb-bgfx{position:absolute;inset:-40%;background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--c1) 22%,transparent) 0 8deg,transparent 8deg 20deg);opacity:.55;animation:ciSpin 24s linear infinite}
   .bb-boss{position:absolute;left:50%;top:3%;height:64%;max-width:86%;transform:translateX(-50%);object-fit:contain;border-radius:16px;filter:drop-shadow(0 0 26px rgba(255,255,255,.28))}
   .bb-boss.shake{animation:bbHit .9s ease-in-out}
+  .bb-stage.god{background:#6fa8ff url(bg_god.webp) center/cover no-repeat}
+  .bb-stage.god .bb-bgfx{display:none}
+  .bb-stage.god .bb-boss{top:1%;height:68%;filter:drop-shadow(0 0 28px rgba(255,236,170,.8));animation:bbFloat 4.2s ease-in-out infinite}
+  .bb-stage.god .bb-boss.shake{animation:bbHit .9s ease-in-out}
+  @keyframes bbFloat{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-16px)}}
   .bb-me{position:absolute;left:3%;bottom:2%;height:38%;max-width:46%;object-fit:contain;border-radius:14px;filter:drop-shadow(0 0 20px var(--c1));animation:bdIdle 3.4s ease-in-out infinite}
   .bb-me.egg{width:90px;height:112px}.bb-me.egg svg{width:100%;height:100%}
   .bb-me.dash{animation:bbDash .75s ease-in-out}
