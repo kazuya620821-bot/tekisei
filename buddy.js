@@ -2,11 +2,11 @@
 // タマゴ → 経験値100でかえる（4科目の経験値の割合で型が決まる）→ 成体 → 究極進化
 // index.html の db / persist / P / today / byId / esc などを使う（読み込みは index.html の本体より前）。
 window.BUDDY_CFG = {
-  // ---- 眠る・おとうさん ----
+  // ---- 眠る・お父さん ----
   sleepWarnDays: 3,        // この日数あいたら「ねむそう」
   sleepDays: 4,            // この日数あいたら「眠る」
   dormPerDay: 10,          // 休眠値＝あいた日数×この値（上限100）
-  dadLimit: 70,            // 休眠値がこれ以上で、かつ4科目の習熟度より高いと「おとうさん」が出る
+  dadLimit: 70,            // 休眠値がこれ以上で、かつ4科目の習熟度より高いと「お父さん」が出る
   // ---- 経験値 ----
   xpBase: 10, xpPerStar: 3,   // はじめて完了した問題：10＋難度×3
   xpRepeat: 2,                // 同じ問題をもう一度（1日1回まで）
@@ -88,7 +88,7 @@ window.BUDDY_CFG = {
       xs[subjOf(p)] += g; sum += g;
     });
     const total = b.xp || 0;
-    if (total > sum) {                       // 親の採点ぶんなど、科目がわからない経験値は、いまの割合で配る
+    if (total > sum) {                       // 親の採点ぶんなど、科目が分からない経験値は、今の割合で配る
       const rest = total - sum;
       if (sum > 0) SUBJ.forEach(s => { xs[s] += Math.round(rest * xs[s] / sum); });
       else xs.math += rest;
@@ -160,7 +160,7 @@ window.BUDDY_CFG = {
     return evs;
   }
 
-  /* ---------- 状態（通常・嬉しい・眠る・おとうさん）---------- */
+  /* ---------- 状態（通常・嬉しい・眠る・お父さん）---------- */
   let happyUntil = 0;
   function status() {
     const b = B(), prof = proficiency();
@@ -187,22 +187,25 @@ window.BUDDY_CFG = {
     const suf = state === "happy" ? "_happy" : state === "sleep" ? "_sleep" : "";
     return "c_" + f.type + "_" + stageNo(f) + suf + ".webp";
   }
+  // 戦闘用：背景なしの切り抜き画像（究極進化のみ用意。ない場合は ふつうの画像に戻る）
+  const meSrc = f => f.stage >= 3 ? "c_" + f.type + "_3_nb.webp" : spriteSrc(f, "normal");
+  const fixImg = (im, alt) => { im.onerror = () => { im.onerror = null; im.src = alt; }; };
   function nameOf(f, state) {
-    if (state === "dad") return "おとうさん";
+    if (state === "dad") return "お父さん";
     if (f.stage === 0) return "タマゴ";
     return TYPES[f.type].n;
   }
   function subName(f, state) {
-    if (state === "dad") return "ねむそうなおとうさん";
-    if (f.stage === 0) return "たまごの中で、なにかが育っているよ";
+    if (state === "dad") return "ねむそうなお父さん";
+    if (f.stage === 0) return "卵の中で、何かが育っているよ";
     return TYPES[f.type].l + "　" + STAGE_NAMES[f.stage];
   }
 
   const LINES = {
-    normal: ["いっしょにがんばろうね！", "キミならできるよ！", "きょうは どれから やる？", "1問だけでも、ちゃんと前に進むよ！"],
-    egg: ["たまごの中から、とくとく…音がするよ。", "いろいろな科目を解くと、どんな子が生まれるかな？", "もうすぐ 会えるかもしれないね！"],
-    happy: ["やったー！", "がんばったね！", "いいね、その調子！", "ありがとう！ちからが わいてきたよ！"],
-    sleepy: ["ふわぁ…ちょっと ねむいな。1問だけ いっしょに やってみる？"],
+    normal: ["一緒にがんばろうね！", "キミならできるよ！", "今日は どれから やる？", "1問だけでも、ちゃんと前に進むよ！"],
+    egg: ["卵の中から、とくとく…音がするよ。", "いろいろな科目を解くと、どんな子が生まれるかな？", "もうすぐ 会えるかもしれないね！"],
+    happy: ["やったー！", "がんばったね！", "いいね、その調子！", "ありがとう！力が わいてきたよ！"],
+    sleepy: ["ふわぁ…ちょっと ねむいな。1問だけ 一緒に やってみる？"],
     sleep: ["むにゃ…1問やれば、すぐ起きるよ。", "ぐぅ…いつでも待ってるよ。"],
     dad: ["あれ……？ 今日はお勉強しないの？", "ちょっと休憩……のつもりだったんだけどなぁ。", "そろそろ一緒に勉強しようか！"]
   };
@@ -220,19 +223,19 @@ window.BUDDY_CFG = {
     return t;
   }
 
-  /* ---------- れんぞくスタンプ（ログインボーナス）---------- */
+  /* ---------- 連続スタンプ（ログインボーナス）---------- */
   const STREAK_MILESTONES = {3: 3, 5: 5, 7: 10, 10: 10, 14: 15, 21: 20, 30: 30};
   const STREAK_MSG = {
-    3: ["3日つづいたね！", "いい調子。この流れ、大切にしよう。"],
-    5: ["5日れんぞく！がんばってるねー！", "毎日の積み重ねが、いちばんの力になるよ。"],
-    7: ["1週間れんぞく！", "7日つづけられたのは、りっぱな力だよ。"],
-    10: ["10日れんぞく！", "もう、勉強が生活の一部になってきたね。"],
-    14: ["2週間れんぞく！", "つづける力は、入試でもきっと味方になるよ。"],
-    21: ["3週間れんぞく！", "すごい。ここまでつづいた人は、なかなかいないよ。"],
-    30: ["30日れんぞく！", "ひと月つづけた自分を、ほこりに思っていいよ。"]
+    3: ["3日続いたね！", "いい調子。この流れ、大切にしよう。"],
+    5: ["5日連続！がんばってるねー！", "毎日の積み重ねが、一番の力になるよ。"],
+    7: ["1週間連続！", "7日続けられたのは、りっぱな力だよ。"],
+    10: ["10日連続！", "もう、勉強が生活の一部になってきたね。"],
+    14: ["2週間連続！", "続ける力は、入試でもきっと味方になるよ。"],
+    21: ["3週間連続！", "すごい。ここまで続いた人は、なかなかいないよ。"],
+    30: ["30日連続！", "ひと月続けた自分を、ほこりに思っていいよ。"]
   };
   const wkKey = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x.getFullYear() + "/" + (x.getMonth() + 1) + "/" + x.getDate(); };
-  // 勉強した日から、れんぞく日数を数える。1週間に1回だけ、1日お休みしても切れない（お休みチケット・自動）
+  // 勉強した日から、連続日数を数える。1週間に1回だけ、1日お休みしても切れない（お休みチケット・自動）
   function streakInfo() {
     const b = B(), now = new Date(); now.setHours(0, 0, 0, 0);
     const ds = Array.from(new Set(b.days)).map(dkey).filter(Boolean).sort((x, y) => x - y);
@@ -291,7 +294,7 @@ window.BUDDY_CFG = {
     });
     if (o.mock && mockSubs.length) mockSubs.forEach(s => { by[s] += C.xpMock / mockSubs.length; });
     markStudy();
-    // れんぞくの節目ボーナス：その日に取り組んだ科目に等分して配る（型の割合をかたよらせないため）
+    // 連続の節目ボーナス：その日に取り組んだ科目に等分して配る（型の割合をかたよらせないため）
     let sk = null; const si = streakInfo(); b.streakAwards = b.streakAwards || {};
     if (si.alive && STREAK_MILESTONES[si.cur] && !b.streakAwards[si.start + ":" + si.cur]) {
       b.streakAwards[si.start + ":" + si.cur] = t;
@@ -333,7 +336,7 @@ window.BUDDY_CFG = {
     if (sk) setTimeout(() => streakOverlay(sk, showEvo), 700); else showEvo();
   }
   function streakOverlay(sk, done) {
-    const m = STREAK_MSG[sk.n] || [sk.n + "日れんぞく！", "すごいね。"];
+    const m = STREAK_MSG[sk.n] || [sk.n + "日連続！", "すごいね。"];
     const o = document.createElement("div"); o.className = "bd-evo"; document.body.appendChild(o);
     o.innerHTML = `<div class="box"><div class="bd-stamp">${sk.n}<small>日</small></div><h2>${esc(m[0])}</h2><p>${esc(m[1])}</p><p class="bd-sub">ボーナス経験値 +${sk.bonus}</p><button class="primary" id="bdOk">やったー！</button></div>`;
     o.querySelector("#bdOk").onclick = () => { o.remove(); if (done) done(); };
@@ -341,10 +344,10 @@ window.BUDDY_CFG = {
 
   /* ---------- ごほうび（親の採点が入ったとき）---------- */
   const REWARD = [
-    {min: 80, head: ["ぜんぶ たしかめた力、光ってるよ", "考えぬいた分だけ、ちゃんと点になったね", "いまの力、かなり本物だよ"], msg: ["むずかしい問題にも、あきらめずに向きあえたね。この調子で、つぎも進もう。", "できた問題は、人に説明できるくらいまで理解を深めると、もっと強くなるよ。"], title: "すばらしい！"},
-    {min: 60, head: ["あと一歩のところまで来たよ", "できたところが、ちゃんと増えてるよ", "おしい問題が、伸びしろだよ"], msg: ["できた点を、まず自分でほめよう。まちがえた問題をもう一度やると、ぐんと伸びるよ。", "考え方があっていた問題も多いよ。まちがえた問題を、もう一度ためしてみよう。"], title: "いい調子！", review: true},
-    {min: 30, head: ["今日も 机に向かえたのが すごい", "やってみたことが、いちばん大事だよ", "むずかしい問題は、伸びるチャンス"], msg: ["どこでつまずいたかが分かれば、次は必ず強くなるよ。ひとつだけ、ふり返ってみよう。", "点数より、取り組んだことがえらいよ。まちがえた問題は、ゆっくり見直せば大丈夫。"], title: "やってみたね！", review: true},
-    {min: 0, head: ["やれやれ、パパを頼りなさい"], msg: ["どこでつまずいたか、いっしょに見てみよう。ひとりで悩まなくて大丈夫だよ。"], title: "パパの出番！", review: true, papa: true}
+    {min: 80, head: ["全部 確かめた力、光ってるよ", "考えぬいた分だけ、ちゃんと点になったね", "今の力、かなり本物だよ"], msg: ["難しい問題にも、あきらめずに向きあえたね。この調子で、次も進もう。", "できた問題は、人に説明できるくらいまで理解を深めると、もっと強くなるよ。"], title: "すばらしい！"},
+    {min: 60, head: ["あと一歩のところまで来たよ", "できたところが、ちゃんと増えてるよ", "おしい問題が、伸びしろだよ"], msg: ["できた点を、まず自分でほめよう。間違えた問題をもう一度やると、ぐんと伸びるよ。", "考え方が合っていた問題も多いよ。間違えた問題を、もう一度試してみよう。"], title: "いい調子！", review: true},
+    {min: 30, head: ["今日も 机に向かえたのが すごい", "やってみたことが、一番大事だよ", "難しい問題は、伸びるチャンス"], msg: ["どこでつまずいたかが分かれば、次は必ず強くなるよ。一つだけ、ふり返ってみよう。", "点数より、取り組んだことがえらいよ。間違えた問題は、ゆっくり見直せば大丈夫。"], title: "やってみたね！", review: true},
+    {min: 0, head: ["やれやれ、パパを頼りなさい"], msg: ["どこでつまずいたか、一緒に見てみよう。一人で悩まなくて大丈夫だよ。"], title: "パパの出番！", review: true, papa: true}
   ];
   function rewardOf(pct) { return REWARD.find(r => pct >= r.min) || REWARD[REWARD.length - 1]; }
   /* ごほうび画像：この端末(IndexedDB)だけに保存。公開リポジトリには入れない */
@@ -356,7 +359,7 @@ window.BUDDY_CFG = {
   function rkey(r) { return r.min >= 80 ? "rw_80" : r.min >= 60 ? "rw_60" : r.min >= 30 ? "rw_30" : "rw_0"; }
   function rewardSettings() {
     const host = document.getElementById("rwSet"); if (!host) return;
-    host.innerHTML = RKEYS.map(([k, n]) => `<div class="bd-rwrow" data-k="${k}"><div class="th">?</div><div><b>${n}</b><br><label class="rwb">えらぶ<input type="file" accept="image/*" hidden></label> <button class="ghost rwx">もどす</button></div></div>`).join("");
+    host.innerHTML = RKEYS.map(([k, n]) => `<div class="bd-rwrow" data-k="${k}"><div class="th">?</div><div><b>${n}</b><br><label class="rwb">選ぶ<input type="file" accept="image/*" hidden></label> <button class="ghost rwx">もどす</button></div></div>`).join("");
     host.querySelectorAll(".bd-rwrow").forEach(row => {
       const k = row.dataset.k, th = row.querySelector(".th");
       const show = () => idbGet(k).then(b => { th.innerHTML = b ? `<img src="${URL.createObjectURL(b)}" alt="">` : (k === "rw_0" ? `<img src="reward_papa.webp" alt="">` : "なし"); });
@@ -377,8 +380,8 @@ window.BUDDY_CFG = {
     o.innerHTML = `<div class="box"><div class="bd-sub">親の採点が入りました</div>${pic}
       <div class="bd-rscore"><b>${Math.round(rw.score)}</b>点 <span>／ ${Math.round(rw.max)}点（${Math.round(rw.pct)}％）</span>　<em>${esc(r.title)}</em></div>
       <div class="bd-rmsg"><b>${esc(pickR(r.head))}</b><p>${esc(pickR(r.msg))}</p><div class="bd-from">おうえん：適性検査トレーニング</div></div>
-      <div class="bd-rxp">経験値 +${Math.round(gain)}${si.cur ? "　／　れんぞく " + si.cur + "日め" : ""}</div>
-      <div class="row" style="justify-content:center;gap:10px;margin-top:12px">${r.review ? '<button id="bdRv">まちがえた問題を見る</button>' : ""}<button class="primary" id="bdOk">つぎへ</button></div></div>`;
+      <div class="bd-rxp">経験値 +${Math.round(gain)}${si.cur ? "　／　連続 " + si.cur + "日め" : ""}</div>
+      <div class="row" style="justify-content:center;gap:10px;margin-top:12px">${r.review ? '<button id="bdRv">間違えた問題を見る</button>' : ""}<button class="primary" id="bdOk">次へ</button></div></div>`;
     idbGet(k).then(b => { if (!b) return; const w = o.querySelector(".bd-wrap, .bd-big, svg"); const el = document.createElement("div"); el.className = "bd-photo"; el.innerHTML = '<img alt="">'; el.firstChild.src = URL.createObjectURL(b); const old = o.querySelector(".bd-wrap"); if (old) old.replaceWith(el); else o.querySelector(".box").insertBefore(el, o.querySelector(".bd-rscore")); });
     const close = go => { o.remove(); if (go) location.hash = "#review"; if (done) done(); };
     o.querySelector("#bdOk").onclick = () => close(false);
@@ -512,7 +515,7 @@ window.BUDDY_CFG = {
       else prog = `<div class="bd-sub" style="margin-top:8px">究極進化まで育ったよ！旅立ちもできるよ。</div>`;
     }
     return `<button class="card bd-card" data-go="#buddy">${sprite(false, f, st)}<div class="bd-info">
-      <div class="bd-name">${esc(nameOf(f, st.state))}</div><div class="bd-sub">${esc(subName(f, st.state))}　経験値 ${B().xp}${streakInfo().cur >= 2 ? "　れんぞく " + streakInfo().cur + "日" : ""}</div>
+      <div class="bd-name">${esc(nameOf(f, st.state))}</div><div class="bd-sub">${esc(subName(f, st.state))}　経験値 ${B().xp}${streakInfo().cur >= 2 ? "　連続 " + streakInfo().cur + "日" : ""}</div>
       <div class="bd-say">${esc(line(st, f))}</div>${prog}</div></button>`;
   }
 
@@ -544,30 +547,30 @@ window.BUDDY_CFG = {
     const tot = Math.max(1, b.xp);
     const xrows = SUBJ.map(s => `<div class="bd-row"><b>${SUBJN[s]}</b><div class="bar sx"><i style="width:${Math.round((b.xpSub[s] || 0) / mx * 100)}%"></i></div><span>${Math.round(b.xpSub[s] || 0)}（${Math.round((b.xpSub[s] || 0) / tot * 100)}%）</span></div>`).join("");
     const prow = SUBJ.map(s => `<div class="bd-row"><b>${SUBJN[s]}</b><div class="bar"><i style="width:${st.prof[s]}%"></i></div><span>${st.prof[s]}</span></div>`).join("");
-    const evo = b.evo.slice(-6).reverse().map(e => `<li>${esc(e.date)}　${e.stage === 1 ? "たまごから " + TYPES[e.type].l + "（" + TYPES[e.type].n + "）がかえった" : TYPES[e.type].n + "が" + STAGE_NAMES[e.stage] + "になった"}</li>`).join("");
+    const evo = b.evo.slice(-6).reverse().map(e => `<li>${esc(e.date)}　${e.stage === 1 ? "卵から " + TYPES[e.type].l + "（" + TYPES[e.type].n + "）がかえった" : TYPES[e.type].n + "が" + STAGE_NAMES[e.stage] + "になった"}</li>`).join("");
     const lean = f.stage === 0 ? decideType(b.xpSub) : null;
     const typeMsg = f.stage === 0
-      ? (lean ? "いまのところ「" + esc(TYPES[lean].l) + "」になりそう。経験値" + C.hatchXp + "でかえるまで、変わるかもしれないよ。" : "まだ、どんな子が生まれるかわからないよ。いろいろな科目を解いてみよう。")
+      ? (lean ? "今のところ「" + esc(TYPES[lean].l) + "」になりそう。経験値" + C.hatchXp + "でかえるまで、変わるかもしれないよ。" : "まだ、どんな子が生まれるか分からないよ。いろいろな科目を解いてみよう。")
       : (esc(TYPES[f.type].l + "（" + TYPES[f.type].n + "）の姿です。") + (f.stage < 3 && decideType(b.xpSub) && decideType(b.xpSub) !== f.type ? "　次の進化では「" + esc(TYPES[decideType(b.xpSub)].l) + "」になりそう。進化まで、変わるかもしれないよ。" : (f.stage < 3 ? "　次の進化でも、この調子なら同じ型だよ。" : "")));
     $("#app").innerHTML = `
     <div class="card bd-big">${sprite(true, f, st)}
       <div class="bd-name">${esc(nameOf(f, st.state))}</div><div class="bd-sub">${esc(subName(f, st.state))}</div>
       <div class="bd-say">${esc(line(st, f))}</div></div>
-    <h2>れんぞくスタンプ</h2>
-    <div class="card"><div class="bd-week">${weekStamps().map(x => `<div class="${x.done ? "d" : x.rest ? "r" : ""} ${x.today ? "t" : ""}">${x.n}<br>${x.done ? "✔" : x.rest ? "休" : "・"}</div>`).join("")}</div><div class="bd-sub" style="margin-top:8px">いま <b>${streakInfo().cur}</b> 日れんぞく　／　さいこう ${streakInfo().best} 日　／　お休みチケット：${streakInfo().ticketLeft ? "今週は 1回つかえるよ" : "今週は つかったよ"}</div><p class="note" style="margin:6px 0 0">問題を1つ記録した日に、スタンプがつきます。3・5・7・10・14・21・30日で、ボーナス経験値。1日休んでも、週に1回は つづきます。とぎれても、経験値は へりません。</p></div>
+    <h2>連続スタンプ</h2>
+    <div class="card"><div class="bd-week">${weekStamps().map(x => `<div class="${x.done ? "d" : x.rest ? "r" : ""} ${x.today ? "t" : ""}">${x.n}<br>${x.done ? "✔" : x.rest ? "休" : "・"}</div>`).join("")}</div><div class="bd-sub" style="margin-top:8px">今 <b>${streakInfo().cur}</b> 日連続　／　最高 ${streakInfo().best} 日　／　お休みチケット：${streakInfo().ticketLeft ? "今週は 1回使えるよ" : "今週は 使ったよ"}</div><p class="note" style="margin:6px 0 0">問題を1つ記録した日に、スタンプがつきます。3・5・7・10・14・21・30日で、ボーナス経験値。1日休んでも、週に1回は 続きます。とぎれても、経験値は へりません。</p></div>
     <h2>経験値</h2>
     <div class="card"><div>${b.xp} <span class="muted">経験値</span>　<span class="muted">今週 ${weekCount()}日 がんばったよ</span></div>
       ${nx ? `<div class="bar" style="margin:8px 0"><i style="width:${Math.round(nx.frac * 100)}%"></i></div><div class="bd-sub">次は「${esc(nx.label)}」　${nx.need.length ? esc(nx.need.join("／")) : "条件はそろっているよ。1問やると成長するかも！"}</div>` : `<div class="bd-sub" style="margin-top:6px">究極進化まで育ちました。</div>`}</div>
-    ${f.stage === 3 ? `<h2>旅立ちのとき</h2><div class="card"><p style="margin:0 0 8px">${esc(TYPES[f.type].n)}は、りっぱに育ちました。旅立つと、${esc(TYPES[f.type].n)}は「お助けキャラ」として、BOSSとの戦いで力を貸してくれます。そして新しいタマゴがはじまります。</p><p class="note" style="margin:0 0 10px">記録・図鑑・解いた問題の履歴は消えません。新しい周では、同じ問題をもう一度やると、また経験値がもらえます。</p><button class="primary" id="bdDepart">旅立たせて、新しいタマゴをむかえる</button></div>` : ""}
+    ${f.stage === 3 ? `<h2>旅立ちのとき</h2><div class="card"><p style="margin:0 0 8px">${esc(TYPES[f.type].n)}は、りっぱに育ちました。旅立つと、${esc(TYPES[f.type].n)}は「お助けキャラ」として、BOSSとの戦いで力を貸してくれます。そして新しいタマゴが始まります。</p><p class="note" style="margin:0 0 10px">記録・図鑑・解いた問題の履歴は消えません。新しい周では、同じ問題をもう一度やると、また経験値がもらえます。</p><button class="primary" id="bdDepart">旅立たせて、新しいタマゴをむかえる</button></div>` : ""}
     ${helperCards()}
     <h2>科目ごとの経験値</h2>
-    <div class="card">${xrows}<p class="note" style="margin:6px 0 0">解いた問題の科目に経験値がたまります。たまごがかえるときと、進化するときに、この割合で型が決まります。</p>
+    <div class="card">${xrows}<p class="note" style="margin:6px 0 0">解いた問題の科目に経験値がたまります。卵がかえるときと、進化するときに、この割合で型が決まります。</p>
       <div class="bd-sub" style="font-size:15px;color:var(--ink);margin-top:8px">${typeMsg}</div></div>
     <h2>科目ごとの習熟度（100点満点）</h2>
     <div class="card">${prow}<p class="note" style="margin:6px 0 0">解いた問題の得点率から決まります。親の採点が入ると、そちらが使われます。進化の条件に使います。</p></div>
     ${evo ? `<h2>これまでの成長</h2><div class="card"><ul style="margin:0;padding-left:20px">${evo}</ul></div>` : ""}
     ${titlesHTML()}
-    <div class="row" style="margin-top:14px"><button class="primary" data-go="#boss">BOSSにちょうせん</button><button data-go="#codex">図鑑を見る</button></div>
+    <div class="row" style="margin-top:14px"><button class="primary" data-go="#boss">BOSSに挑戦</button><button data-go="#codex">図鑑を見る</button></div>
     <div id="rwBox"></div>
     <div id="rwTap" style="text-align:center;margin:26px 0 8px;font-size:11px;color:var(--sub);opacity:.45;user-select:none;-webkit-user-select:none">適性検査トレーニング</div>`;
     (function () {
@@ -582,7 +585,7 @@ window.BUDDY_CFG = {
   function hintOf(k) {
     if (HINT[k]) return HINT[k];
     const p = k.split("_").map(s => SUBJN[s]);
-    return p.length === 1 ? p[0] + "の経験値がほかより多い" : p.join("と") + "の経験値が同じくらい多い";
+    return p.length === 1 ? p[0] + "の経験値が他より多い" : p.join("と") + "の経験値が同じくらい多い";
   }
   function foundForms(b) {
     const f = Object.assign({}, b.forms || {});
@@ -595,7 +598,7 @@ window.BUDDY_CFG = {
     const b = B(), fm = foundForms(b);
     const total = TYPE_ORDER.length * 3 + 2 + SPECIALS.length;
     let got = 1 + (b.dadFound ? 1 : 0) + SPECIALS.filter(x => specialsOf()[x.id]).length;
-    const egg = `<div class="card it"><div class="eg">${eggSVG(0.2, "normal")}</div><b>タマゴ</b><small>はじまりの姿</small></div>`;
+    const egg = `<div class="card it"><div class="eg">${eggSVG(0.2, "normal")}</div><b>タマゴ</b><small>始まりの姿</small></div>`;
     const rows = TYPE_ORDER.map(k => {
       const slots = [1, 2, 3].map(n => {
         const ok = !!fm[k + "_" + n]; if (ok) got++;
@@ -604,8 +607,8 @@ window.BUDDY_CFG = {
       const any = [1, 2, 3].some(n => fm[k + "_" + n]);
       return `<div class="card cxrow ${any ? "" : "lockrow"}"><div class="cxh">${any ? `<b>${esc(TYPES[k].n)}</b><small>${esc(TYPES[k].l)}</small>` : `<b>？？？</b><small>${esc(hintOf(k))}</small>`}</div><div class="cxs">${slots}</div></div>`;
     }).join("");
-    const dad = `<div class="card it ${b.dadFound ? "" : "lock"}"><img src="${b.dadFound ? DAD_IMG : BLANK}" alt="" draggable="false"><b>${b.dadFound ? "おとうさん" : "？？？"}</b><small>${b.dadFound ? "休みが続くとあらわれる" : "かくれキャラ"}</small></div>`;
-    $("#app").innerHTML = `<p class="muted">出会った姿が登録されます。（見つけた ${got} / ${total}）　タマゴ1＋11種×3段階＋かくれキャラ1＋とくべつなお助けキャラ</p><div class="cx2">${egg}${dad}${SPECIALS.map(x => { const ok = !!specialsOf()[x.id]; return `<div class="card it ${ok ? "" : "lock"}"><img src="${ok ? x.img : BLANK}" alt="" draggable="false"><b>${ok ? esc(x.n) : "？？？"}</b><small>${esc(x.hint)}</small></div>`; }).join("")}</div>${rows}`;
+    const dad = `<div class="card it ${b.dadFound ? "" : "lock"}"><img src="${b.dadFound ? DAD_IMG : BLANK}" alt="" draggable="false"><b>${b.dadFound ? "お父さん" : "？？？"}</b><small>${b.dadFound ? "休みが続くと現れる" : "かくれキャラ"}</small></div>`;
+    $("#app").innerHTML = `<p class="muted">出会った姿が登録されます。（見つけた ${got} / ${total}）　タマゴ1＋11種×3段階＋かくれキャラ1＋特別なお助けキャラ</p><div class="cx2">${egg}${dad}${SPECIALS.map(x => { const ok = !!specialsOf()[x.id]; return `<div class="card it ${ok ? "" : "lock"}"><img src="${ok ? x.img : BLANK}" alt="" draggable="false"><b>${ok ? esc(x.n) : "？？？"}</b><small>${esc(x.hint)}</small></div>`; }).join("")}</div>${rows}`;
   }
 
   function toast(gain, kind) {
@@ -627,7 +630,7 @@ window.BUDDY_CFG = {
     const done = () => { o.remove(); if (sps.length) specialOverlay(sps, () => { if (location.hash === "" || location.hash === "#") route(); }); else if (location.hash === "" || location.hash === "#") route(); };
     if (hatch) {
       const t = TYPES[hatch.type];
-      o.innerHTML = `<div class="box"><h2>たまごが ゆれている…！</h2><div class="bd-wrap big egg shake" style="margin:0 auto">${eggSVG(1, "normal")}</div></div>`;
+      o.innerHTML = `<div class="box"><h2>卵が ゆれている…！</h2><div class="bd-wrap big egg shake" style="margin:0 auto">${eggSVG(1, "normal")}</div></div>`;
       setTimeout(() => {
         o.innerHTML = `<div class="box"><h2>${esc(t.l)}が かえった！</h2>${sprite(true, f, {state: "happy"})}<div class="bd-name">${esc(t.n)}</div><p>これまでの経験値の割合で、この子が生まれました。図鑑にも登録されたよ。</p><button class="primary" id="bdOk">やったー！</button></div>`;
         o.querySelector("#bdOk").onclick = done;
@@ -640,12 +643,12 @@ window.BUDDY_CFG = {
   }
 
 
-  /* ---------- とくべつなお助けキャラ（条件をみたすとお助けキャラになる。あとから増やせる）---------- */
+  /* ---------- 特別なお助けキャラ（条件をみたすとお助けキャラになる。あとから増やせる）---------- */
   const SPECIALS = [
-    {id: "gp", n: "マッ○マン", img: "c_gp.webp", cut: "c_gp_cut.webp", skill: "マッ○マンパンチ", xp: 500, streak: 15, hint: "経験値500と、れんぞく15日でお助けキャラになる",
-     title: "つづける力のヒーロー", say: ["やっと会えたな！", "毎日つづけてきた君の力、ずっと見ていたぞ。"]},
-    {id: "mama", n: "女神ママテミス", img: "c_mama.webp", cut: "c_mama_cut.webp", skill: "ストロングリジェクション", cond: "god", hint: "全知全能の神に3回まけると、あらわれる",
-     title: "母なる女神の加護", say: ["あらあら、神さまにまけちゃったの？", "だいじょうぶ。ママの大すきな梅の力、見せてあげる！"]}
+    {id: "gp", n: "マッ○マン", img: "c_gp.webp", cut: "c_gp_cut.webp", skill: "マッ○マンパンチ", xp: 500, streak: 15, hint: "経験値500と、連続15日でお助けキャラになる",
+     title: "続ける力のヒーロー", say: ["やっと会えたな！", "毎日続けてきた君の力、ずっと見ていたぞ。"]},
+    {id: "mama", n: "女神ママテミス", img: "c_mama.webp", cut: "c_mama_cut.webp", skill: "ストロングリジェクション", cond: "god", hint: "全知全能の神に3回負けると、現れる",
+     title: "母なる女神の加護", say: ["あらあら、神さまに負けちゃったの？", "大丈夫。ママの大すきな梅の力、見せてあげる！"]}
   ];
   const specialsOf = () => { const b = B(); b.specials = b.specials || {}; return b.specials; };
   const friendCount = () => (B().friends || []).length + Object.keys(specialsOf()).length;
@@ -657,7 +660,7 @@ window.BUDDY_CFG = {
   function specialOverlay(ids, done) {
     const id = ids[0], s = SPECIALS.find(x => x.id === id); if (!s) { if (done) done(); return; }
     const o = document.createElement("div"); o.className = "bd-evo"; document.body.appendChild(o);
-    o.innerHTML = `<div class="bb-flash"></div><div class="box"><h2>新しいお助けキャラが あらわれた！</h2><div class="bb-descend"><img class="bb-img" alt="" src="${s.img}"></div><div class="bd-name">${esc(s.n)}</div><div class="bd-rmsg" style="margin-top:10px"><b>「${esc(s.say[0])}」</b><p>${esc(s.say[1])}</p></div><div class="bd-rxp">称号GET：${esc(s.title)}</div><div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="spOk">つぎへ</button></div></div>`;
+    o.innerHTML = `<div class="bb-flash"></div><div class="box"><h2>新しいお助けキャラが 現れた！</h2><div class="bb-descend"><img class="bb-img" alt="" src="${s.img}"></div><div class="bd-name">${esc(s.n)}</div><div class="bd-rmsg" style="margin-top:10px"><b>「${esc(s.say[0])}」</b><p>${esc(s.say[1])}</p></div><div class="bd-rxp">称号GET：${esc(s.title)}</div><div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="spOk">次へ</button></div></div>`;
     o.querySelector("#spOk").onclick = () => { o.remove(); if (ids.length > 1) specialOverlay(ids.slice(1), done); else if (done) done(); };
   }
 
@@ -666,18 +669,25 @@ window.BUDDY_CFG = {
   //  stage：2＝成体／3＝究極進化　min：4科目すべてがこの値以上　avg：4科目の平均　mock：模擬Ⅰ・Ⅱの合計が究極進化の基準以上　friends：お助けキャラの数
   //  周回ごとに、min と avg が LAP_UP ずつ上がる（2周目＋10、3周目＋20…。上限100）
   const BOSS_CFG = {
-    taurus: {stage: 2},
-    devil:  {stage: 2, min: 35, avg: 50},
-    dragon: {stage: 3, min: 50, avg: 65},
-    god:    {stage: 3, min: 65, avg: 75, mock: true, friends: 1}
+    taurus:  {stage: 2},
+    devil:   {stage: 2, min: 35, avg: 50},
+    taurus2: {stage: 2, min: 42, avg: 56},
+    dragon:  {stage: 3, min: 50, avg: 65},
+    devil2:  {stage: 3, min: 58, avg: 72},
+    dragon2: {stage: 3, min: 65, avg: 78},
+    god:     {stage: 3, min: 72, avg: 84, mock: true, friends: 1}
   };
   const LAP_UP = 10;
-  const GOD_LOSS_FOR_MAMA = 3;     // 神にこの回数まけると、女神ママテミスがお助けキャラになる（1日1回までカウント）
+  const GOD_LOSS_FOR_MAMA = 3;     // 神に3回負けると、女神ママテミスがお助けキャラになる（1日1回までカウント）
+  // 挑戦できるのは「一番手前の、まだ倒していないBOSS」だけ（この並びが挑戦の順番）
   const BOSSES = [
-    {id: "taurus", n: "半人前パパタウロス", img: "boss_1.webp", appear: "ブヒッ", lose: "おでに勝つなんてやるなぁ", win: "えっ、ザコ？", title: "ツノおり見習い"},
-    {id: "devil", n: "悪魔王パパモデウス", img: "boss_2.webp", appear: "太らせてやろうか", lose: "おれが負ける…だと", win: "ふはははっ、お前も悪魔になるか？", title: "あくま退治の達人"},
+    {id: "taurus", n: "半人前パパタウロス", img: "boss_1.webp", appear: "ブヒッ", lose: "おでに勝つなんてやるなぁ", win: "えっ、ザコ？", title: "ツノ折り見習い"},
+    {id: "devil", n: "悪魔王パパモデウス", img: "boss_2.webp", appear: "太らせてやろうか", lose: "おれが負ける…だと", win: "ふはははっ、お前も悪魔になるか？", title: "悪魔退治の達人"},
+    {id: "taurus2", n: "一人前パパタウロス", img: "boss_5.webp", appear: "もう半人前とは呼ばせん！", lose: "見事だ…一人前と認めよう", win: "まだまだ半人前だな", title: "一人前の壁を越えし者"},
     {id: "dragon", n: "龍王パパムート", img: "boss_3.webp", appear: "やっとここまで来たか", lose: "君がNo.1だ", win: "おれに勝とうなんて100年早いわ", title: "ドラゴンスレイヤー"},
-    {id: "god", n: "全知全能の神パパウス", img: "boss_4.webp", appear: "私を倒せば合格は間近だ", lose: "あとは自分を信じて突き進め", win: "神は絶対です", title: "神に認められし者"}
+    {id: "devil2", n: "真・悪魔王パパモデウス", img: "boss_6.webp", appear: "真の力を見せてやろう", lose: "真の力でも届かぬ…だと", win: "ふはははっ、もっと太らせてやる", title: "真・悪魔退治の達人"},
+    {id: "dragon2", n: "真・龍王パパムート", img: "boss_7.webp", appear: "ここからが本当の戦いだ", lose: "見事だ、真の王者よ", win: "まだ早い。出直してこい", title: "真・ドラゴンスレイヤー"},
+    {id: "god", n: "全知全能の神パパウス", img: "boss_4.webp", appear: "私を倒せば合格は間近だ", lose: "後は自分を信じて突き進め", win: "神は絶対です", title: "神に認められし者", bgm: "bgm_god.mp3"}
   ];
   const bossState = () => { const b = B(); b.boss = b.boss || {}; return b.boss; };
   const bossWon = id => !!(bossState()[id] && bossState()[id].won);
@@ -686,14 +696,14 @@ window.BUDDY_CFG = {
   const SKILL_NAMES = {
     math: ["ひらめきパンチ", "ひらめきフラッシュ", "ジオメトリック・バースト"],
     science: ["ぴかぴかビーカー", "サイエンス・ビーム", "ミラクル・コスモス"],
-    japanese: ["ことばのつぶて", "ことのは ふぶき", "奥義・百花繚乱言霊陣"],
-    society: ["ちずポイ", "れきしのいかずち", "ワールド・ヒストリア"],
-    math_science: ["ほしのそろばん", "ロジカル・ミーティア", "セレスティアル・ロジック"],
-    math_japanese: ["ひらめきメロディ", "ことば×かず ハーモニー", "メルティック・ハーモニア"],
+    japanese: ["言葉のつぶて", "ことのは ふぶき", "奥義・百花繚乱言霊陣"],
+    society: ["地図ポイ", "歴史のいかずち", "ワールド・ヒストリア"],
+    math_science: ["星のそろばん", "ロジカル・ミーティア", "セレスティアル・ロジック"],
+    math_japanese: ["ひらめきメロディ", "言葉×数 ハーモニー", "メルティック・ハーモニア"],
     math_society: ["データ・チャージ", "グラフ・ストライク", "ルークス・グランドマップ"],
-    science_japanese: ["はっぱのことのは", "リーフ・ポエム", "奥義・花鳥風月の生命詩"],
-    science_society: ["ちきゅうどんどん", "テラ・クエイク", "ガイア・ストリーム"],
-    japanese_society: ["ふるごとのささやき", "れきしがたり・ソング", "メロディア・サーガ"],
+    science_japanese: ["葉っぱのことのは", "リーフ・ポエム", "奥義・花鳥風月の生命詩"],
+    science_society: ["地球どんどん", "テラ・クエイク", "ガイア・ストリーム"],
+    japanese_society: ["ふるごとのささやき", "歴史語り・ソング", "メロディア・サーガ"],
     balance: ["にじいろのたま", "レインボー・スパーク", "オール・ルミナス"]
   };
   const skillOf = f => f.stage === 0 || !f.type ? "ころころアタック" : SKILL_NAMES[f.type][Math.min(3, f.stage) - 1];
@@ -701,8 +711,8 @@ window.BUDDY_CFG = {
   const colsOf = t => !t ? ["#bda8ff", "#ffd45c"] : t === "balance" ? ["#ff5a5a", "#ffd23a", "#4cc38a", "#3a7bff", "#b36bff"] : t.split("_").map(s => SUBCOL[s]);
   const skillImg = t => "skill_" + t + ".webp";
 
-  /* ---------- お助けキャラ（旅立ったキャラ・とくべつなキャラ）---------- */
-  const friendHelper = (t, key) => ({key: key, n: TYPES[t].n, img: "c_" + t + "_3.webp", cut: skillImg(t), skill: SKILL_NAMES[t][2], type: t});
+  /* ---------- お助けキャラ（旅立ったキャラ・特別なキャラ）---------- */
+  const friendHelper = (t, key) => ({key: key, n: TYPES[t].n, img: skillImg(t), cut: "c_" + t + "_3_nb.webp", skill: SKILL_NAMES[t][2], type: t});
   const specialHelper = s => ({key: s.id, n: s.n, img: s.img, cut: s.cut || s.img, skill: s.skill, special: true});
   function helpers() {
     const out = [];
@@ -725,27 +735,27 @@ window.BUDDY_CFG = {
   function bossHint(c) {
     const a = ["勉強が足りないようだ。習熟度を上げて再挑戦しよう！"];
     if (c.lacks.includes("stage")) a.push("もっと成長（進化）してからおいで。");
-    if (c.subs.length) a.push("とくに「" + c.subs.map(s => SUBJN[s]).join("」「") + "」のパワーがたりないようだ。");
-    else if (c.lacks.includes("avg")) a.push("4科目ぜんたいのパワーを、もう少し上げよう。");
-    if (c.lacks.includes("mock")) a.push("模擬テスト（Ⅰ・Ⅱ）で力をためしてみよう。");
-    if (c.lacks.includes("friends")) a.push("お助けキャラをふやそう（いま " + friendCount() + " / " + c.need.friends + "）。");
-    if (c.up > 0) a.push("いま " + lap() + " 周目。BOSSも つよくなっているよ。");
+    if (c.subs.length) a.push("特に「" + c.subs.map(s => SUBJN[s]).join("」「") + "」のパワーがたりないようだ。");
+    else if (c.lacks.includes("avg")) a.push("4科目全体のパワーを、もう少し上げよう。");
+    if (c.lacks.includes("mock")) a.push("模擬テスト（Ⅰ・Ⅱ）で力を試してみよう。");
+    if (c.lacks.includes("friends")) a.push("お助けキャラを増やそう（今 " + friendCount() + " / " + c.need.friends + "）。");
+    if (c.up > 0) a.push("今 " + lap() + " 周目。BOSSも 強くなっているよ。");
     return a;
   }
   function earnedTitles() {
     const t = [];
-    BOSSES.forEach(x => { if (bossWon(x.id)) t.push({t: x.title, from: x.n + "をたおした"}); });
+    BOSSES.forEach(x => { if (bossWon(x.id)) t.push({t: x.title, from: x.n + "を倒した"}); });
     SPECIALS.forEach(x => { if (specialsOf()[x.id]) t.push({t: x.title, from: x.n + "がお助けキャラになった"}); });
     return t;
   }
   function titlesHTML() {
     const e = earnedTitles(), total = BOSSES.length + SPECIALS.length;
-    return `<h2>称号（${e.length} / ${total}）</h2><div class="card">${e.length ? e.map(x => `<div class="bd-ttl"><b>${esc(x.t)}</b><small>${esc(x.from)}</small></div>`).join("") : '<span class="muted">BOSSをたおしたり、お助けキャラをふやすと、称号がもらえるよ。</span>'}</div>`;
+    return `<h2>称号（${e.length} / ${total}）</h2><div class="card">${e.length ? e.map(x => `<div class="bd-ttl"><b>${esc(x.t)}</b><small>${esc(x.from)}</small></div>`).join("") : '<span class="muted">BOSSを倒したり、お助けキャラを増やすと、称号がもらえるよ。</span>'}</div>`;
   }
 
   /* ---------- 戦闘 ---------- */
   const ATK = [["算数", "math"], ["理科", "science"], ["国語", "japanese"], ["社会", "society"], ["総合", null]];
-  // force: "auto"（ほんとうの条件）／"ok"（ぜんぶ成功）／"ng"（ぜんぶ失敗）… 開発者モードのみ
+  // force: "auto"（本当の条件）／"ok"（全部成功）／"ng"（全部失敗）… 開発者モードのみ
   function bossAttacks(id, f, force) {
     const c = bossCheck(id, f), stageOk = !c.lacks.includes("stage");
     let res = SUBJ.map(sj => stageOk && !c.subs.includes(sj));
@@ -791,7 +801,8 @@ window.BUDDY_CFG = {
     if (stage >= 2) { const tb = t0 + (stage >= 3 ? 0.9 : 0.4); tone(tb, 220, 40, 0.6, 0.5); noise(tb, 0.5, 0.4, 400); }
   }
   let bgm = null;
-  function bgmStart() { try { if (!bgm) { bgm = new Audio("bgm_battle.mp3"); bgm.loop = true; bgm.volume = 0.5; } bgm.muted = muted; bgm.currentTime = 0; const p = bgm.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+  let bgmFile = "";
+  function bgmStart(file) { try { file = file || "bgm_battle.mp3"; if (bgm && bgmFile !== file) { bgm.pause(); bgm = null; } if (!bgm) { bgm = new Audio(file); bgmFile = file; bgm.loop = true; bgm.volume = 0.5; } bgm.muted = muted; bgm.currentTime = 0; const p = bgm.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
   function bgmStop() { try { if (bgm) { bgm.pause(); bgm.currentTime = 0; } } catch (e) {} }
 
   // カットイン（必殺技・お助けキャラ共通）。画面をタップするとすぐ終わる。戻り値＝いますぐ終わらせる関数
@@ -812,7 +823,8 @@ window.BUDDY_CFG = {
   function summon(o, f, done) {
     const src = spriteSrc(f, "normal"), cols = colsOf(f.type);
     o.className = "bd-evo bb-battle";
-    o.innerHTML = `<div class="bb-sum" style="--c1:${cols[0]};--c2:${cols[cols.length - 1]}"><div class="bb-sum-bg"></div><div class="bb-card"><div class="face l"><img src="${src}" alt="" draggable="false"></div><div class="face r"><img src="${src}" alt="" draggable="false"></div></div><div class="bb-sum-flash"></div><img class="bb-sum-me" src="${src}" alt="" draggable="false"><div class="bb-sum-name">${esc(nameOf(f, "normal"))}</div></div>`;
+    o.innerHTML = `<div class="bb-sum" style="--c1:${cols[0]};--c2:${cols[cols.length - 1]}"><div class="bb-sum-bg"></div><div class="bb-card"><div class="face l"><img src="${src}" alt="" draggable="false"></div><div class="face r"><img src="${src}" alt="" draggable="false"></div></div><div class="bb-sum-flash"></div><img class="bb-sum-me" src="${meSrc(f)}" alt="" draggable="false"><div class="bb-sum-name">${esc(nameOf(f, "normal"))}</div></div>`;
+    const sm = o.querySelector(".bb-sum-me"); if (sm) fixImg(sm, src);
     let fin = false;
     const end = () => { if (fin) return; fin = true; clearTimeout(tm); done(); };
     const tm = setTimeout(end, 3300); setTimeout(() => { if (!fin) o.onclick = end; }, 400);   // 押したクリックがそのまま届いて飛ばされないよう、少しあとから「タップで飛ばす」を有効にする
@@ -828,7 +840,7 @@ window.BUDDY_CFG = {
     const img = cls => `<img class="bb-img ${cls || ""}" alt="" draggable="false" src="${bo.img}">`;
     o.innerHTML = `<div class="box"><div class="bb-name">${esc(bo.n)}</div>${dev ? '<div class="bd-sub">開発者モード（記録は残りません）</div>' : ""}<div class="bb-appear">${img()}</div><div class="bd-rmsg"><b>「${esc(bo.appear)}」</b></div><div class="row" style="justify-content:center;gap:10px;margin-top:12px"><button class="primary" id="bbGo">${id === "god" ? "神に挑戦する！" : "挑戦する！"}</button><button id="bbNo">やめておく</button></div></div>`;
     o.querySelector("#bbNo").onclick = back;
-    o.querySelector("#bbGo").onclick = () => { ac(); bgmStart(); if (f.stage > 0) summon(o, f, battle); else battle(); };
+    o.querySelector("#bbGo").onclick = () => { ac(); bgmStart(bo.bgm); if (f.stage > 0) summon(o, f, battle); else battle(); };
 
     function battle() {
       o.onclick = null;
@@ -836,14 +848,15 @@ window.BUDDY_CFG = {
       if (!dev) { st[id] = st[id] || {tries: 0}; st[id].tries = (st[id].tries || 0) + 1; persist(); }
       let n = 0, hp = 5; const cols = colsOf(f.type);
       o.className = "bd-evo bb-battle";
-      const me = f.stage === 0 ? `<div class="bb-me egg">${eggSVG(1, "normal")}</div>` : `<img class="bb-me" alt="" draggable="false" src="${spriteSrc(f, "normal")}">`;
+      const me = f.stage === 0 ? `<div class="bb-me egg">${eggSVG(1, "normal")}</div>` : `<img class="bb-me" alt="" draggable="false" src="${meSrc(f)}">`;
+      const fixMe = () => { const im = o.querySelector("img.bb-me"); if (im) fixImg(im, spriteSrc(f, "normal")); };
       o.innerHTML = `<div class="bb-bt" style="--c1:${cols[0]};--c2:${cols[cols.length - 1]}">
         <div class="bb-top"><b>${esc(bo.n)}</b><span class="bb-hp">${[0, 1, 2, 3, 4].map(() => "<i></i>").join("")}</span>${dev ? '<span class="bb-dev">DEV</span>' : ""}<button id="bbMute" class="ghost" style="color:#fff">${muted ? "🔇" : "🔊"}</button></div>
         <div class="bb-stage"><div class="bb-bgfx"></div><img class="bb-boss" alt="" draggable="false" src="${bo.img}"><img class="bb-fx" alt="" draggable="false" src="fx_fight.webp">${me}<div class="bb-pop"></div><div class="bb-flashfx"></div><div class="bb-cutlayer"></div></div>
         <div class="bb-panel"><div class="bb-msg" id="bbMsg">「${esc(bo.appear)}」</div>
         <div class="bb-dots">${ATK.map((a, i) => `<span data-i="${i}">${a[0]}</span>`).join("")}</div>
         <div class="row" style="justify-content:center;margin-top:10px"><button class="primary bb-atk" id="bbAtk"></button></div></div></div>`;
-      const q = s => o.querySelector(s);
+      const q = s => o.querySelector(s); fixMe();
       const hpEl = o.querySelectorAll(".bb-hp i"), dots = o.querySelectorAll(".bb-dots span"), msg = q("#bbMsg"), btn = q("#bbAtk"), bimg = q(".bb-boss"), fx = q(".bb-fx"), pop = q(".bb-pop"), meEl = q(".bb-me"), layer = q(".bb-cutlayer"), flash = q(".bb-flashfx"), stageEl = q(".bb-stage");
       q("#bbMute").onclick = e => { muted = !muted; e.target.textContent = muted ? "🔇" : "🔊"; if (bgm) bgm.muted = muted; };
       const label = () => { btn.textContent = n < 4 ? "⚔ " + ATK[n][0] + "の力で こうげき！" : "⚔ 必殺技！ " + skillOf(f); btn.disabled = false; };
@@ -857,7 +870,7 @@ window.BUDDY_CFG = {
       // 4回目のあと：お助けキャラが全員カットインして攻撃（演出だけ。勝ち負けには影響しない）
       function helperSeq(done) {
         let i = 0, skipped = false, cur = null;
-        const sk = document.createElement("button"); sk.className = "bb-skip"; sk.textContent = "とばす ▶▶"; stageEl.appendChild(sk);
+        const sk = document.createElement("button"); sk.className = "bb-skip"; sk.textContent = "飛ばす ▶▶"; stageEl.appendChild(sk);
         sk.onclick = () => { skipped = true; if (cur) cur(); };
         const next = () => {
           if (skipped || i >= H.length) { sk.remove(); layer.innerHTML = ""; done(); return; }
@@ -867,7 +880,7 @@ window.BUDDY_CFG = {
             setTimeout(next, 200);
           });
         };
-        msg.textContent = "そのとき…！ お助けキャラが かけつけた！";
+        msg.textContent = "その時…！ お助けキャラが かけつけた！";
         setTimeout(next, 700);
       }
 
@@ -887,7 +900,7 @@ window.BUDDY_CFG = {
         } else run();
         function resolve() {
           dots[k].classList.remove("cur"); dots[k].classList.add(ok ? "ok" : "ng");
-          if (ok) { sfxHit(); hp--; hpEl[hp].classList.add("off"); pop.textContent = "成功！"; pop.className = "bb-pop ok"; msg.textContent = (k < 4 ? ATK[k][0] + "の力が" : "必殺技が") + " きまった！"; }
+          if (ok) { sfxHit(); hp--; hpEl[hp].classList.add("off"); pop.textContent = "成功！"; pop.className = "bb-pop ok"; msg.textContent = (k < 4 ? ATK[k][0] + "の力が" : "必殺技が") + " 決まった！"; }
           else { sfxMiss(); pop.textContent = "かわされた…"; pop.className = "bb-pop ng"; msg.textContent = (k < 4 ? "「" + ATK[k][0] + "」のこうげきは かわされた！" : "必殺技は かわされた！"); }
           if (n < 5) {
             dots[n].classList.add("cur");
@@ -908,30 +921,30 @@ window.BUDDY_CFG = {
             persist();
           }
           o.className = "bd-evo";
-          o.innerHTML = `<div class="box"><div class="bb-name">${esc(bo.n)}</div><div class="bb-appear">${img()}</div><div class="bd-rmsg"><b>「${esc(bo.win)}」</b>${bossHint(A.c).map(x => `<p>${esc(x)}</p>`).join("")}</div><div class="bd-rxp">失うものは なにもないよ。力をためて、また来よう！</div><div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="bbBk">もどる</button></div></div>`;
+          o.innerHTML = `<div class="box"><div class="bb-name">${esc(bo.n)}</div><div class="bb-appear">${img()}</div><div class="bd-rmsg"><b>「${esc(bo.win)}」</b>${bossHint(A.c).map(x => `<p>${esc(x)}</p>`).join("")}</div><div class="bd-rxp">失うものは 何もないよ。力をためて、また来よう！</div><div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="bbBk">戻る</button></div></div>`;
           o.querySelector("#bbBk").onclick = () => { if (mama) { o.remove(); specialOverlay(["mama"], boss); } else back(); };
           return;
         }
         const first = !dev && !st[id].won; if (!dev) { st[id].won = st[id].won || todayStr(); persist(); } sfxWin();
         o.className = "bd-evo";
-        o.innerHTML = `<div class="box"><div class="bb-flash"></div><h2>BOSSをたおした！</h2><div class="bb-appear">${img("bb-down")}</div><div class="bd-rmsg"><b>「${esc(bo.lose)}」</b></div>${first ? `<div class="bd-rxp">称号GET：<b>${esc(bo.title)}</b></div>` : (dev ? '<div class="bd-rxp">開発者モード：記録は残していません</div>' : "")}<div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="bbNx">つぎへ</button></div></div>`;
+        o.innerHTML = `<div class="box"><div class="bb-flash"></div><h2>BOSSを倒した！</h2><div class="bb-appear">${img("bb-down")}</div><div class="bd-rmsg"><b>「${esc(bo.lose)}」</b></div>${first ? `<div class="bd-rxp">称号GET：<b>${esc(bo.title)}</b></div>` : (dev ? '<div class="bd-rxp">開発者モード：記録は残していません</div>' : "")}<div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="bbNx">次へ</button></div></div>`;
         o.querySelector("#bbNx").onclick = () => {
           if (dev) { back(); return; }
           o.remove();
-          if (first && id === "dragon") godDescent(); else if (first && id === "god") toBeContinued(); else boss();
+          if (first && id === "dragon2") godDescent(); else if (first && id === "god") toBeContinued(); else boss();
         };
       }
     }
   }
 
-  // 神降臨：龍王パパムートを初めて倒したときの演出。このあと「神に挑戦」が選べるようになる
+  // 神降臨：龍王パパムートを初めて倒したときの演出。この後「神に挑戦」が選べるようになる
   function godDescent(dev) {
-    const bo = BOSSES[3], b = B(); if (!dev) { b.godSeen = todayStr(); persist(); }
+    const bo = BOSSES.find(x => x.id === "god"), b = B(); if (!dev) { b.godSeen = todayStr(); persist(); }
     const o = document.createElement("div"); o.className = "bd-evo"; document.body.appendChild(o);
     const close = () => { o.remove(); boss(); };
-    o.innerHTML = `<div class="box" style="background:#101a33;color:#fff"><h2 style="color:#fff">これで ぜんぶ たおした……と おもいきや</h2><p style="font-size:20px;margin:30px 0">…… 空が、光りはじめた ……</p></div>`;
+    o.innerHTML = `<div class="box" style="background:#101a33;color:#fff"><h2 style="color:#fff">これで 全部 倒した……と 思いきや</h2><p style="font-size:20px;margin:30px 0">…… 空が、光り始めた ……</p></div>`;
     setTimeout(() => {
-      o.innerHTML = `<div class="bb-flash"></div><div class="box"><h2>神が 降臨した！</h2><div class="bb-descend"><img class="bb-img" alt="" src="${bo.img}"></div><div class="bb-name">${esc(bo.n)}</div><div class="bd-rmsg"><b>「汝、更なる力を求めるか？」</b></div><div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="gdOk">つぎへ</button></div></div>`;
+      o.innerHTML = `<div class="bb-flash"></div><div class="box"><h2>神が 降臨した！</h2><div class="bb-descend"><img class="bb-img" alt="" src="${bo.img}"></div><div class="bb-name">${esc(bo.n)}</div><div class="bd-rmsg"><b>「汝、更なる力を求めるか？」</b></div><div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="gdOk">次へ</button></div></div>`;
       o.querySelector("#gdOk").onclick = power;
     }, 2400);
     function power() {
@@ -940,7 +953,7 @@ window.BUDDY_CFG = {
       try { const a = ac(); if (a) { const t = a.currentTime; noise(t, 1.6, 0.4, 100); tone(t, 80, 40, 1.6, 0.45, "sawtooth"); tone(t + 1.5, 200, 40, 0.8, 0.5); } } catch (e) {}
       setTimeout(() => {
         o.className = "bd-evo";
-        o.innerHTML = `<div class="box"><div class="bb-appear"><img class="bb-img" alt="" src="${bo.img}"></div><div class="bd-rmsg"><b>神が 圧倒的な力を 見せつけた……！</b><p>相手は神です。いまのままでは勝てません。力をつけてチャレンジしましょう。</p></div><div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="gdBk">もどる</button></div></div>`;
+        o.innerHTML = `<div class="box"><div class="bb-appear"><img class="bb-img" alt="" src="${bo.img}"></div><div class="bd-rmsg"><b>神が 圧倒的な力を 見せつけた……！</b><p>相手は神です。今のままでは勝てません。力をつけてチャレンジしましょう。</p></div><div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="gdBk">戻る</button></div></div>`;
         o.querySelector("#gdBk").onclick = close;
       }, 2800);
     }
@@ -948,7 +961,7 @@ window.BUDDY_CFG = {
   function toBeContinued(dev) {
     if (!dev) { const b = B(); b.cleared = todayStr(); persist(); }
     const o = document.createElement("div"); o.className = "bb-tbc"; document.body.appendChild(o);
-    o.innerHTML = `<div><div class="t">To Be Continued...</div><p>ここまで来た きみへ。つづきは、また あとで。</p><button id="tbcOk">もどる</button></div>`;
+    o.innerHTML = `<div><div class="t">To Be Continued...</div><p>ここまで来た 君へ。続きは、また 後で。</p><button id="tbcOk">戻る</button></div>`;
     o.querySelector("#tbcOk").onclick = () => { o.remove(); boss(); };
   }
 
@@ -967,8 +980,8 @@ window.BUDDY_CFG = {
       const chips = pool.map(h => `<button class="dv-c ${hs.has(h.key) ? "on" : ""}" data-h="${h.key}">${h.special ? "" : "旅立ち："}${esc(h.n)}</button>`).join("");
       $("#app").innerHTML = `<p class="muted">開発者モード：${esc(bo.n)} と戦います。結果は記録されません（称号・討伐・周回・お助けキャラは変わりません）。</p>
         <h2>戦うキャラ（メインキャラ）</h2><div class="dv-grid">${rows}</div>
-        <h2>お助けキャラ（4回目のあとにカットイン）</h2><div class="dv-chips">${chips}</div>
-        <h2>攻撃の結果</h2><div class="row"><button class="dv-f ${force === "auto" ? "on" : ""}" data-f="auto">ほんとうの条件で</button><button class="dv-f ${force === "ok" ? "on" : ""}" data-f="ok">ぜんぶ成功</button><button class="dv-f ${force === "ng" ? "on" : ""}" data-f="ng">ぜんぶ失敗</button></div>
+        <h2>お助けキャラ（4回目の後にカットイン）</h2><div class="dv-chips">${chips}</div>
+        <h2>攻撃の結果</h2><div class="row"><button class="dv-f ${force === "auto" ? "on" : ""}" data-f="auto">本当の条件で</button><button class="dv-f ${force === "ok" ? "on" : ""}" data-f="ok">全部成功</button><button class="dv-f ${force === "ng" ? "on" : ""}" data-f="ng">全部失敗</button></div>
         <div class="row" style="margin-top:16px"><button class="primary" id="dvGo">この設定で戦う（${sel.stage === 0 ? "タマゴ" : esc(TYPES[sel.type].n + "・" + STAGE_NAMES[sel.stage])}）</button><button id="dvBk">BOSS一覧へ</button></div>`;
       $("#app").querySelectorAll(".dv-b").forEach(b => b.onclick = () => { sel = {type: b.dataset.t || null, stage: +b.dataset.s}; render(); });
       $("#app").querySelectorAll(".dv-c").forEach(b => b.onclick = () => { const k = b.dataset.h; hs.has(k) ? hs.delete(k) : hs.add(k); render(); });
@@ -980,18 +993,19 @@ window.BUDDY_CFG = {
   }
 
   function boss() {
-    title("BOSSにちょうせん"); setHdr(""); showFab(false);
+    title("BOSSに挑戦"); setHdr(""); showFab(false);
     const b = B(), st = bossState();
-    if (!devMode && bossWon("dragon") && !b.godSeen) { godDescent(); }
+    if (b.godSeen && !bossWon("dragon2")) { delete b.godSeen; persist(); }   // 旧版で先に神が出ていた場合は、真・龍王を倒すまで隠す
+    if (!devMode && bossWon("dragon2") && !b.godSeen) { godDescent(); return; }
     const next = BOSSES.find(x => !bossWon(x.id));
     const rows = BOSSES.filter(x => x.id !== "god" || b.godSeen || devMode).map(x => {
       const w = bossWon(x.id), isNext = next && next.id === x.id, god = x.id === "god";
-      if (w) return `<div class="card bb-row"><img src="${x.img}" alt="" draggable="false"><div><b>${esc(x.n)}</b><br><span class="muted">たおした ✓　称号「${esc(x.title)}」</span><br><button data-boss="${x.id}" style="margin-top:8px">もう一度挑戦</button></div></div>`;
+      if (w) return `<div class="card bb-row"><img src="${x.img}" alt="" draggable="false"><div><b>${esc(x.n)}</b><br><span class="muted">倒した ✓　称号「${esc(x.title)}」</span><br><button data-boss="${x.id}" style="margin-top:8px">もう一度挑戦</button></div></div>`;
       if (isNext) return `<div class="card bb-row now"><img src="${x.img}" alt="" draggable="false"><div><b>${esc(x.n)}</b><br><span class="muted">「${esc(x.appear)}」</span>${god && friendCount() < 1 ? '<br><span class="muted">お助けキャラが いないと、勝てないかも…</span>' : ""}<br><button class="primary" data-boss="${x.id}" style="margin-top:8px">${god ? "神に挑戦" : "挑戦する"}</button></div></div>`;
-      return `<div class="card bb-row lock"><img src="${BLANK}" alt="" draggable="false"><div><b>？？？</b><br><span class="muted">まえのBOSSをたおすと あらわれる</span></div></div>`;
+      return `<div class="card bb-row lock"><img src="${BLANK}" alt="" draggable="false"><div><b>？？？</b><br><span class="muted">前のBOSSを倒すと 現れる</span></div></div>`;
     }).join("");
     const dv = devMode ? `<div class="card" style="border:2px dashed #b36bff"><b>開発者モード ON</b><p class="note" style="margin:4px 0 8px">条件に関係なく、どのBOSSとも戦えます。結果は記録されません。</p><div class="row">${BOSSES.map(x => `<button class="primary small" data-dev="${x.id}">${esc(x.n)}と戦う</button>`).join("")}</div><div class="row" style="margin-top:8px"><button class="small" id="dvDesc">神降臨の演出を見る</button><button class="small" id="dvTbc">To Be Continued を見る</button></div></div>` : "";
-    $("#app").innerHTML = `<p class="muted">キャラクターを育てて、BOSSにちょうせんしよう。負けても、失うものは なにもないよ。</p>${dv}${rows}${b.cleared ? '<div class="card" style="text-align:center"><b>To Be Continued...</b></div>' : ""}${titlesHTML()}`;
+    $("#app").innerHTML = `<p class="muted">キャラクターを育てて、BOSSに挑戦しよう。負けても、失うものは 何もないよ。</p>${dv}${rows}${b.cleared ? '<div class="card" style="text-align:center"><b>To Be Continued...</b></div>' : ""}${titlesHTML()}`;
     document.querySelectorAll("[data-boss]").forEach(el => { el.onclick = () => bossFight(el.dataset.boss); });
     document.querySelectorAll("[data-dev]").forEach(el => { el.onclick = () => devSelect(el.dataset.dev); });
     const d1 = document.getElementById("dvDesc"); if (d1) d1.onclick = () => godDescent(true);
@@ -1013,7 +1027,7 @@ window.BUDDY_CFG = {
   .bb-row{display:flex;gap:12px;align-items:center;margin:10px 0}.bb-row img{width:96px;height:96px;object-fit:cover;border-radius:12px;flex:none}
   .bb-row.now{border:2px solid #e08e1e}.bb-row.lock img{filter:brightness(0) opacity(.5)}
   .bd-ttl{margin:6px 0}.bd-ttl b{display:block;font-size:16px}.bd-ttl small{color:var(--sub)}
-  /* ---- 戦闘：画面ぜんたいを使う ---- */
+  /* ---- 戦闘：画面全体を使う ---- */
   .bb-battle{padding:0;align-items:stretch;overflow:hidden;background:#0b1020}
   .bb-bt{position:relative;width:100%;height:100%;display:flex;flex-direction:column;color:#fff;text-align:center;background:radial-gradient(circle at 50% 35%,#2b3a73,#0b1020 78%)}
   .bb-top{display:flex;align-items:center;gap:10px;justify-content:space-between;font-size:20px;padding:calc(10px + env(safe-area-inset-top)) 16px 6px}

@@ -194,7 +194,7 @@ function home(){
   <p class="note" id="homeNote" style="margin-top:28px;user-select:none;-webkit-user-select:none">記録はこのiPadの中だけに保存されます。ブラウザのデータを消すと記録も消えます。</p><div id="parentBox"></div>`;
   // 保護者メニュー：この注意書きを3秒以内に5回タップすると出る（子どもの目にふれにくくする）
   let tn = 0, t0 = 0;
-  $("#homeNote").onclick = () => { const now = Date.now(); if (now - t0 > 3000) tn = 0; t0 = now; if (++tn >= 5) { tn = 0; window.__parent = true; $("#parentBox").innerHTML = `<h2>保護者メニュー</h2><div class="grid"><button class="card tile" data-go="#weak"><b>得意・不得意</b><span>分野ごとの得点率</span></button><button class="card tile" data-go="#stats"><b>成績</b><span>${n}回分の記録</span></button></div><div class="row" style="margin-top:8px"><button id="parentHide">メニューをとじる</button></div>`; $("#parentHide").onclick = () => { window.__parent = false; $("#parentBox").innerHTML = ""; }; $("#parentBox").scrollIntoView({behavior:"smooth", block:"center"}); } };
+  $("#homeNote").onclick = () => { const now = Date.now(); if (now - t0 > 3000) tn = 0; t0 = now; if (++tn >= 5) { tn = 0; window.__parent = true; $("#parentBox").innerHTML = `<h2>保護者メニュー</h2><div class="grid"><button class="card tile" data-go="#weak"><b>得意・不得意</b><span>分野ごとの得点率</span></button><button class="card tile" data-go="#stats"><b>成績</b><span>${n}回分の記録</span></button></div><div class="row" style="margin-top:8px"><button id="parentHide">メニューを閉じる</button></div>`; $("#parentHide").onclick = () => { window.__parent = false; $("#parentBox").innerHTML = ""; }; $("#parentBox").scrollIntoView({behavior:"smooth", block:"center"}); } };
 }
 
 const SUBJT = {math:"算数", science:"理科", japanese:"国語", society:"社会"};
@@ -362,9 +362,9 @@ function buildText(list){
    + "・採点基準と違うやり方でも、考え方が正しければ得点にする。\n"
    + "・最後に、次の形式の「結果コード」を1行だけ書く。（各設問の得点をカンマ区切り、問題はセミコロン区切り。得点は配点以内）\n"
    + "  例：結果:I-M4-01=2,4,6;II-W1-01=8\n"
-   + "・見やすさのため、解説より前に、次の「採点一覧」を書く。（1行1設問：問題ID・設問番号・得点／配点・理由ひとこと）\n"
+   + "・見やすさのため、解説より前に、次の「採点一覧」を書く。（1行1設問：問題ID・設問番号・得点／配点・理由一言）\n"
    + "・採点に迷った設問や、模範解答・採点基準とずれて判断した設問には「★要確認」と付け、その理由を1行で書く。（親が確認すべき所を絞るため）\n"
-   + "・漢字の書きまちがいは、その設問で問われている内容が合っていれば、まちがい1か所につき1点まで減点し、理由に書く。\n"
+   + "・漢字の書き間違いは、その設問で問われている内容が合っていれば、間違い1か所につき1点まで減点し、理由に書く。\n"
    + "・解説は、問題ごとに短く（できた点・直す点を各1〜2文）。\n";
   list.forEach((s, k) => {
     const p = byId(s.pid); if (!p) return;
@@ -395,7 +395,7 @@ async function sendSubs(list){
   $("#mk").onclick = () => { mark(); inbox(); };
   const r = await shareText(text);
   if (r === "shared" || r === "copied") { mark(); say(r === "copied" ? "コピーしました。LINEなどに貼って送ってください。採点待ちに移しました。" : "送りました。採点待ちに移しました。"); setTimeout(() => { if (location.hash === "#inbox") { const keep = $("#outt") && text; inbox(true); } }, 1500); }
-  else if (r === "manual") { $("#mk").classList.remove("hide"); say("自動で送れませんでした。上の文章をコピーして送り、そのあと「送った」を押してください。", true); }
+  else if (r === "manual") { $("#mk").classList.remove("hide"); say("自動で送れませんでした。上の文章をコピーして送り、その後「送った」を押してください。", true); }
   else say("送信をやめました。まだ送信待ちのままです。");
 }
 function applyResult(raw){
@@ -439,7 +439,7 @@ function inbox(keepMsg){
       const lab = d === 0 ? "同じ" : d < 0 ? "自己採点が甘かった（" + d + "点）" : "自己採点が辛かった（＋" + d + "点）";
       return `<tr><td>設問${i+1}</td><td>${a}/${mx}</td><td>${b}/${mx}</td><td style="color:var(--${d===0?"sub":d<0?"ng":"warn"})">${lab}</td></tr>`; }).join("");
     const n = p.qs.filter((q,i) => (r.self.items[i]||0) !== (r.items[i]||0)).length;
-    return `<details style="margin-top:6px"><summary class="muted">自己採点とのちがい：${n ? n + "設問で違う" : "全部同じ"}</summary><table><tr><th></th><th>自己採点</th><th>親の採点</th><th>ちがい</th></tr>${rows}</table></details>`;
+    return `<details style="margin-top:6px"><summary class="muted">自己採点との違い：${n ? n + "設問で違う" : "全部同じ"}</summary><table><tr><th></th><th>自己採点</th><th>親の採点</th><th>違い</th></tr>${rows}</table></details>`;
   };
   $("#app").innerHTML = `
   <h2>① 親に送る</h2>
@@ -487,7 +487,7 @@ function stats(){
   });
   let hi = 0, lo = 0, same = 0;
   db.results.forEach(r => { if (r.src !== "parent" || !r.self) return; const p = byId(r.pid); if (!p) return; p.qs.forEach((q,i) => { const a = r.self.items[i] || 0, b = r.items[i] || 0; if (a > b) hi++; else if (a < b) lo++; else same++; }); });
-  if (hi + lo + same) h += `<h2>自己採点と親の採点のちがい</h2><div class="card"><div class="row"><span>自己採点が甘かった設問</span><span class="spacer"></span><b>${hi}</b></div><div class="row"><span>同じだった設問</span><span class="spacer"></span><b>${same}</b></div><div class="row"><span>自己採点が辛かった設問</span><span class="spacer"></span><b>${lo}</b></div><p class="note" style="margin:8px 0 0">「甘かった」が多いときは、答えの例や採点基準を、もう一度見比べる練習をしよう。</p></div>`;
+  if (hi + lo + same) h += `<h2>自己採点と親の採点の違い</h2><div class="card"><div class="row"><span>自己採点が甘かった設問</span><span class="spacer"></span><b>${hi}</b></div><div class="row"><span>同じだった設問</span><span class="spacer"></span><b>${same}</b></div><div class="row"><span>自己採点が辛かった設問</span><span class="spacer"></span><b>${lo}</b></div><p class="note" style="margin:8px 0 0">「甘かった」が多いときは、答えの例や採点基準を、もう一度見比べる練習をしよう。</p></div>`;
   if (db.mocks.length) { h += '<h2>模擬の記録</h2><div class="card">'+db.mocks.slice().reverse().slice(0,10).map(m => `<div class="row"><span>${esc(m.date)}</span><b>${esc(m.sub==="I"?"Ⅰ":"Ⅱ")}</b><span class="spacer"></span><span class="badge ${pctCls(m.pct)}">${m.score}/${m.max}点（${m.pct}％）</span><span class="muted">${m.used}分</span></div>`).join("")+'</div>'; }
   h += '<p class="note">得点率が低い単元から、復習リストで練習しよう。親の採点が戻った問題は、親の採点が成績に反映されます。</p><div class="row"><button id="rst">記録を全部消す</button></div>';
   $("#app").innerHTML = h;
@@ -524,7 +524,7 @@ function weakText(){
 }
 function weak(){
   title("得意・不得意"); setHdr(""); showFab(false);
-  const F = weakData(), lvl = f => { const v = Math.round(f.s / f.m * 100); return f.done >= 2 ? (v >= 80 ? ["good", "得意"] : v >= 60 ? ["mid", "もう少し"] : ["bad", "のびしろ"]) : ["na", "参考"]; };
+  const F = weakData(), lvl = f => { const v = Math.round(f.s / f.m * 100); return f.done >= 2 ? (v >= 80 ? ["good", "得意"] : v >= 60 ? ["mid", "もう少し"] : ["bad", "伸びしろ"]) : ["na", "参考"]; };
   let h = "", any = false;
   Object.keys(SUBJT).forEach(sj => {
     const rows = F.filter(f => f.sj === sj);
@@ -539,8 +539,8 @@ function weak(){
   const wk = F.filter(f => f.done >= 2 && f.s / f.m < 0.7).sort((a, b) => a.s / a.m - b.s / b.m).slice(0, 3);
   let rec = "";
   wk.forEach(f => { const ps = f.ps.filter(p => { const r = lastOf(p.id); return !r || pct(r) < 70; }).slice(0, 4); if (ps.length) rec += `<h3 style="margin:12px 0 4px">${SUBJT[f.sj]}：${esc(f.name)}</h3>` + ps.map(p => `<button class="card item" data-go="#p/${p.id}"><span class="t"><b>${esc(p.title)}</b><br><span class="muted">${esc(p.unit)}</span></span>${stars(p.star)}${badge(p.id)}</button>`).join(""); });
-  h = (any ? "" : '<div class="card">まだ記録が少ないので、問題を解くと、ここに得意・不得意が出ます。</div>') + (rec ? '<h2>つぎにやるなら</h2>' + rec : "") + h;
-  h += '<h2>保護者の方へ</h2><div class="card"><p class="note" style="margin:0 0 8px">1つの分野で2問以上解くと「得意／のびしろ」を表示します（1問だけは「参考」）。下のボタンで成績の文章をコピーできます。Claudeに貼ると、苦手分野の類題づくりに使えます。</p><div class="row"><button id="wcopy" class="primary">成績をコピー</button></div><textarea id="wtxt" readonly style="width:100%;height:120px;margin-top:8px;display:none"></textarea></div>';
+  h = (any ? "" : '<div class="card">まだ記録が少ないので、問題を解くと、ここに得意・不得意が出ます。</div>') + (rec ? '<h2>次にやるなら</h2>' + rec : "") + h;
+  h += '<h2>保護者の方へ</h2><div class="card"><p class="note" style="margin:0 0 8px">1つの分野で2問以上解くと「得意／伸びしろ」を表示します（1問だけは「参考」）。下のボタンで成績の文章をコピーできます。Claudeに貼ると、苦手分野の類題づくりに使えます。</p><div class="row"><button id="wcopy" class="primary">成績をコピー</button></div><textarea id="wtxt" readonly style="width:100%;height:120px;margin-top:8px;display:none"></textarea></div>';
   $("#app").innerHTML = h;
   $("#wcopy").onclick = async () => { const t = weakText(); try { await navigator.clipboard.writeText(t); $("#wcopy").textContent = "コピーしました ✓"; } catch (e) { const a = $("#wtxt"); a.value = t; a.style.display = "block"; a.select(); $("#wcopy").textContent = "下の文章をコピーしてください"; } };
 }
