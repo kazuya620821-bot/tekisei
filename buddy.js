@@ -689,6 +689,7 @@ window.BUDDY_CFG = {
     {id: "dragon2", n: "真・龍王パパムート", img: "boss_7.webp", appear: "ここからが本当の戦いだ", lose: "見事だ、真の王者よ", win: "まだ早い。出直してこい", title: "真・ドラゴンスレイヤー"},
     {id: "god", n: "全知全能の神パパウス", img: "boss_4.webp", appear: "私を倒せば合格は間近だ", lose: "後は自分を信じて突き進め", win: "神は絶対です", title: "神に認められし者", bgm: "bgm_god.mp3"}
   ];
+  BOSSES.forEach(x => { x.img += "?v=30"; });   // 画像を差し替えたときに古い絵が残らないよう、版の数字をつける（差し替えたら数字を上げる）
   const bossState = () => { const b = B(); b.boss = b.boss || {}; return b.boss; };
   const bossWon = id => !!(bossState()[id] && bossState()[id].won);
 
