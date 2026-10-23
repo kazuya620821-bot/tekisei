@@ -689,7 +689,7 @@ window.BUDDY_CFG = {
     {id: "dragon2", n: "真・龍王パパムート", img: "boss_7.webp", appear: "ここからが本当の戦いだ", lose: "見事だ、真の王者よ", win: "まだ早い。出直してこい", title: "真・ドラゴンスレイヤー"},
     {id: "god", n: "全知全能の神パパウス", img: "boss_4.webp", appear: "私を倒せば合格は間近だ", lose: "後は自分を信じて突き進め", win: "神は絶対です", title: "神に認められし者", bgm: "bgm_god.mp3"}
   ];
-  BOSSES.forEach(x => { x.img += "?v=30"; });   // 画像を差し替えたときに古い絵が残らないよう、版の数字をつける（差し替えたら数字を上げる）
+  BOSSES.forEach(x => { x.img += "?v=31"; });   // 画像を差し替えたときに古い絵が残らないよう、版の数字をつける（差し替えたら数字を上げる）
   const bossState = () => { const b = B(); b.boss = b.boss || {}; return b.boss; };
   const bossWon = id => !!(bossState()[id] && bossState()[id].won);
 
@@ -835,13 +835,14 @@ window.BUDDY_CFG = {
   function bossFight(id, opt) {
     opt = opt || {};
     const dev = !!opt.dev, bo = BOSSES.find(x => x.id === id), st = bossState();
+    const resume = (id === "god" && !dev && !bossWon("god")) ? ((st.god && st.god.phase) || 1) : 1;   // 途中まで進んでいたら、その形態から再開
     const f = opt.form || form(), H = dev ? (opt.helpers || []) : helpers(), force = dev ? (opt.force || "auto") : "auto";
     const o = document.createElement("div"); o.className = "bd-evo"; document.body.appendChild(o);
     const back = () => { bgmStop(); o.remove(); if (dev) devSelect(id, opt); else boss(); };
     const img = cls => `<img class="bb-img ${cls || ""}" alt="" draggable="false" src="${bo.img}">`;
-    o.innerHTML = `<div class="box"><div class="bb-name">${esc(bo.n)}</div>${dev ? '<div class="bd-sub">開発者モード（記録は残りません）</div>' : ""}<div class="bb-appear">${img()}</div><div class="bd-rmsg"><b>「${esc(bo.appear)}」</b></div><div class="row" style="justify-content:center;gap:10px;margin-top:12px"><button class="primary" id="bbGo">${id === "god" ? "神に挑戦する！" : "挑戦する！"}</button><button id="bbNo">やめておく</button></div></div>`;
+    o.innerHTML = `<div class="box"><div class="bb-name">${esc(bo.n)}</div>${dev ? '<div class="bd-sub">開発者モード（記録は残りません）</div>' : ""}<div class="bb-appear">${img()}</div><div class="bd-rmsg"><b>「${esc(bo.appear)}」</b>${resume > 1 ? `<p>続きから：第${resume}形態</p>` : ""}</div><div class="row" style="justify-content:center;gap:10px;margin-top:12px"><button class="primary" id="bbGo">${id === "god" ? "神に挑戦する！" : "挑戦する！"}</button><button id="bbNo">やめておく</button></div></div>`;
     o.querySelector("#bbNo").onclick = back;
-    o.querySelector("#bbGo").onclick = () => { ac(); bgmStart(bo.bgm); if (f.stage > 0) summon(o, f, battle); else battle(); };
+    o.querySelector("#bbGo").onclick = () => { ac(); bgmStart(bo.bgm); if (resume > 1) { o.remove(); godSeq(resume, false); return; } if (f.stage > 0) summon(o, f, battle); else battle(); };
 
     function battle() {
       o.onclick = null;
@@ -912,6 +913,10 @@ window.BUDDY_CFG = {
       };
 
       function finish() {
+        if (A.win && id === "god") {   // 神の第1形態を倒したら、そのまま第2形態へ（BGMは止めない）
+          if (!dev && !bossWon("god")) { st.god = st.god || {tries: 0}; st.god.phase = Math.max(st.god.phase || 1, 2); persist(); }
+          o.remove(); godSeq(2, dev); return;
+        }
         bgmStop();
         if (!A.win) {
           let mama = false;
@@ -966,6 +971,186 @@ window.BUDDY_CFG = {
     o.querySelector("#tbcOk").onclick = () => { o.remove(); boss(); };
   }
 
+
+  /* ---------- 神パパウス 第2・第3形態 ---------- */
+  // 第1形態（いつもの戦闘）を倒すと、そのまま第2形態（4択クイズ）→第3形態（最後の問い）へ進む。
+  // 途中で終わった場合は、次回その形態から再開する（b.boss.god.phase）。BGMは止めずに流し続ける。
+  const GOD2_SEC = 0;   // 第2形態：1問あたりの制限時間（秒）。0＝制限なし（あとで使いたいときは数字を入れる）
+  const GOD_IMG = {b2: "bg_god2.webp?v=32", f2: "boss_8.webp?v=32", b3: "bg_god3.webp?v=32", f3: "boss_9.webp?v=32"};
+  const GODQ = {
+    math: [
+      {q: "時速36kmで走る車は、秒速何mで進んでいますか。", c: ["6m", "10m", "12m", "36m"], a: 1, e: "36km＝36000m、1時間＝3600秒なので、36000÷3600＝10m。"},
+      {q: "3/4 ÷ 3/8 を計算すると、いくつになりますか。", c: ["1/2", "2", "9/32", "3"], a: 1, e: "わる数の逆数をかけて、3/4 × 8/3 ＝ 2。"},
+      {q: "半径4cmの円の面積は何cm²ですか。（円周率は3.14）", c: ["25.12", "50.24", "12.56", "100.48"], a: 1, e: "4×4×3.14＝50.24。"},
+      {q: "定価1500円の品物を、2割引きで売ると、売る値段はいくらですか。", c: ["1000円", "1200円", "1300円", "300円"], a: 1, e: "2割引きは8割の値段。1500×0.8＝1200円。"},
+      {q: "ある数に5をたしてから3倍したら42になりました。ある数はいくつですか。", c: ["7", "9", "11", "14"], a: 1, e: "42÷3＝14、14−5＝9。"}
+    ],
+    science: [
+      {q: "水が氷になると、体積はどうなりますか。", c: ["大きくなる", "小さくなる", "変わらない", "いったん小さくなってから大きくなる"], a: 0, e: "水は氷になると、体積がおよそ1.1倍に大きくなる。"},
+      {q: "植物が日光を受けて養分をつくるとき、外に出す気体はどれですか。", c: ["酸素", "二酸化炭素", "ちっ素", "水素"], a: 0, e: "光合成では二酸化炭素を取り入れ、酸素を出す。"},
+      {q: "月の形が日によって変わって見えるのは、なぜですか。", c: ["月が自分で光る強さが変わるから", "地球のかげが毎日ちがう形で月に落ちるから", "太陽・地球・月の位置関係が変わり、光が当たって見える部分が変わるから", "月が小さくなったり大きくなったりするから"], a: 2, e: "月は太陽の光を反射している。位置関係が変わるので、見える形も変わる。"},
+      {q: "てこで、支点から左へ20cmの所に30gのおもりをつるしました。右へ40cmの所に何gのおもりをつるすと、つり合いますか。", c: ["10g", "15g", "30g", "60g"], a: 1, e: "30×20＝600。600÷40＝15g。"},
+      {q: "人の血液の中で、酸素を運ぶはたらきをするのはどれですか。", c: ["赤血球", "白血球", "血小板", "血しょう"], a: 0, e: "赤血球のヘモグロビンが酸素を運ぶ。"}
+    ],
+    japanese: [
+      {q: "「油を売る」の意味として正しいものはどれですか。", c: ["商売で大もうけをする", "仕事の途中で、むだ話をしてなまける", "一生けんめい働く", "人にものを売りつける"], a: 1, e: "昔、油売りが客と世間話をしながら売ったことから。"},
+      {q: "四字熟語「（　）機一転」の（　）に入る漢字はどれですか。", c: ["心", "新", "神", "進"], a: 1, e: "「心機一転」。あることをきっかけに、気持ちをすっかり入れかえること。"},
+      {q: "「雨がふったので、遠足は中止になった。」の「ので」は、どんな関係を表していますか。", c: ["原因・理由", "逆の内容", "つけ加え", "条件"], a: 0, e: "「雨がふった」ことが、「中止」の理由になっている。"},
+      {q: "「具体」の対義語（反対の意味の言葉）はどれですか。", c: ["抽象", "具象", "実際", "全体"], a: 0, e: "具体⇔抽象。"},
+      {q: "「先生が来る」を尊敬語で言うと、どれが正しいですか。", c: ["参る", "いらっしゃる", "申し上げる", "うかがう"], a: 1, e: "「参る」「うかがう」は自分をへりくだる言い方。「いらっしゃる」が尊敬語。"}
+    ],
+    society: [
+      {q: "日本国憲法の三つの原則にふくまれないものはどれですか。", c: ["国民主権", "基本的人権の尊重", "平和主義", "三権分立"], a: 3, e: "三つの原則は、国民主権・基本的人権の尊重・平和主義。"},
+      {q: "鎌倉幕府を開いた人物はだれですか。", c: ["源義経", "源頼朝", "平清盛", "北条時宗"], a: 1, e: "1192年ごろ、源頼朝が征夷大将軍になった。"},
+      {q: "次のうち、国会の仕事として正しいものはどれですか。", c: ["法律をつくる", "裁判をおこなう", "外国と条約をむすぶ", "内閣総理大臣が政治の仕事を実行する"], a: 0, e: "国会は国の唯一の立法機関。裁判は裁判所、条約をむすぶのは内閣。"},
+      {q: "面積がもっとも大きい都道府県はどれですか。", c: ["岩手県", "北海道", "長野県", "新潟県"], a: 1, e: "北海道は全国でいちばん広い。"},
+      {q: "「持続可能な開発目標（SDGs）」が、達成の目標としている年はいつですか。", c: ["2025年", "2030年", "2040年", "2050年"], a: 1, e: "2015年に決まり、2030年までに達成をめざす。"}
+    ]
+  };
+  const GODQ_LABEL = {math: "算数", science: "理科", japanese: "国語", society: "社会"};
+  const shuffle = a => { const r = a.slice(); for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; };
+  function sfxThunder() { const a = ac(); if (!a) return; const t = a.currentTime; noise(t, 0.12, 0.55, 3000); noise(t + 0.05, 0.9, 0.5, 160); tone(t + 0.05, 90, 35, 0.9, 0.45, "sawtooth"); }
+  function bolts() {
+    let s = "";
+    for (let n = 0, m = 2 + Math.floor(Math.random() * 2); n < m; n++) {
+      let x = 8 + Math.random() * 84; const pts = [];
+      for (let y = 0; y <= 100; y += 7) { pts.push(x.toFixed(1) + "," + y); x += (Math.random() - 0.5) * 18; }
+      s += `<polyline points="${pts.join(" ")}"/>`;
+    }
+    return s;
+  }
+  // 神の戦闘画面（全画面）：背景・神・稲妻・光・下の操作エリア
+  function godStage(o, cls, bg, boss) {
+    o.className = "bd-evo bb-battle";
+    o.innerHTML = `<div class="g-stage ${cls}" style="background-image:url(${bg})"><img class="g-boss" alt="" draggable="false" src="${boss}"><svg class="g-bolt" viewBox="0 0 100 100" preserveAspectRatio="none"></svg><div class="g-flash"></div><div class="g-ui"></div></div>`;
+    return o.querySelector(".g-stage");
+  }
+  function say(ui, text, next, label) {
+    ui.innerHTML = `<div class="g-say">${esc(text)}</div><div class="row" style="justify-content:center"><button class="primary" id="gNx">${esc(label || "つぎへ")}</button></div>`;
+    ui.querySelector("#gNx").onclick = next;
+  }
+  function thunder(st, n, done) {
+    const svg = st.querySelector(".g-bolt"), fl = st.querySelector(".g-flash"); let k = 0;
+    const hit = () => {
+      svg.innerHTML = bolts(); fl.classList.remove("go"); void fl.offsetWidth; fl.classList.add("go"); sfxThunder();
+      st.classList.remove("quake"); void st.offsetWidth; st.classList.add("quake");
+      if (++k < n) setTimeout(hit, 240 + Math.random() * 220); else setTimeout(() => { svg.innerHTML = ""; if (done) done(); }, 700);
+    };
+    hit();
+  }
+  // 神に負けた回数を数える（1日1回まで）。3回で女神ママテミスがお助けキャラに。戻り値＝いま加入したか
+  function godLossCount() {
+    const st = bossState(), g = st.god = st.god || {tries: 0}; g.losses = g.losses || 0;
+    if (g.lossDay !== todayStr()) { g.lossDay = todayStr(); g.losses++; }
+    let mama = false;
+    if (g.losses >= GOD_LOSS_FOR_MAMA && !specialsOf().mama) { specialsOf().mama = todayStr(); mama = true; }
+    persist(); return mama;
+  }
+  function godSeq(ph, dev) {
+    const st0 = bossState(), o = document.createElement("div"); document.body.appendChild(o);
+    const leave = () => { bgmStop(); o.remove(); boss(); };
+    const keep = n => { if (!dev && !bossWon("god")) { st0.god = st0.god || {tries: 0}; st0.god.phase = Math.max(st0.god.phase || 1, n); persist(); } };
+    if (ph === 2) form2(); else form3();
+
+    // ---- 第2形態：4科目の4択クイズ。ぜんぶ正解で勝ち ----
+    function form2() {
+      const st = godStage(o, "p2", GOD_IMG.b2, GOD_IMG.f2), ui = st.querySelector(".g-ui");
+      say(ui, "「ほう、人の身でここまでたどり着くとは」", () => {
+        ui.innerHTML = "";
+        thunder(st, 4, () => say(ui, "「ならば本気を出そう！ 汝の学びが本物であることを証明せよ」", quiz, "挑戦する！"));
+      });
+      function quiz() {
+        const Q = SUBJ.map(s => { const it = GODQ[s][Math.floor(Math.random() * GODQ[s].length)], idx = shuffle(it.c.map((_, k) => k)); return {label: GODQ_LABEL[s], q: it.q, e: it.e, c: idx.map(k => it.c[k]), a: idx.indexOf(it.a)}; });
+        let i = 0; const res = []; let timer = null;
+        const show = () => {
+          const it = Q[i]; clearInterval(timer);
+          ui.innerHTML = `<div class="g-hd"><b>第${i + 1}問／4　${esc(it.label)}</b><span class="g-dots">${Q.map((_, k) => `<i class="${k < res.length ? (res[k] ? "ok" : "ng") : ""}"></i>`).join("")}</span></div>${GOD2_SEC ? '<div class="g-time"><i></i></div>' : ""}<div class="g-q">${esc(it.q)}</div><div class="g-ch">${it.c.map((c, k) => `<button data-k="${k}"><span>${"アイウエ"[k]}</span>${esc(c)}</button>`).join("")}</div>`;
+          const btns = ui.querySelectorAll(".g-ch button");
+          btns.forEach(b => b.onclick = () => answer(+b.dataset.k));
+          if (GOD2_SEC) { let left = GOD2_SEC * 10; const bar = ui.querySelector(".g-time i"); timer = setInterval(() => { left--; bar.style.width = (left / (GOD2_SEC * 10) * 100) + "%"; if (left <= 0) { clearInterval(timer); answer(-1); } }, 100); }
+        };
+        const answer = k => {
+          clearInterval(timer); const it = Q[i], ok = k === it.a; res.push(ok);
+          const btns = ui.querySelectorAll(".g-ch button"); btns.forEach((b, j) => { b.disabled = true; if (j === it.a) b.classList.add("right"); else if (j === k) b.classList.add("wrong"); });
+          ui.querySelectorAll(".g-dots i")[i].className = ok ? "ok" : "ng";
+          const fb = document.createElement("div"); fb.className = "g-fb " + (ok ? "ok" : "ng");
+          fb.innerHTML = `<b>${ok ? "正解！" : (k < 0 ? "時間切れ…" : "不正解…")}</b> ${esc(it.e)}<div class="row" style="justify-content:center;margin-top:8px"><button class="primary" id="gQn">${i < 3 ? "つぎへ" : "結果へ"}</button></div>`;
+          ui.appendChild(fb);
+          if (ok) { sfxHit(); const bs = st.querySelector(".g-boss"); bs.classList.remove("hit"); void bs.offsetWidth; bs.classList.add("hit"); const fl = st.querySelector(".g-flash"); fl.classList.remove("go"); void fl.offsetWidth; fl.classList.add("go"); } else sfxMiss();
+          fb.querySelector("#gQn").onclick = () => { i++; if (i < 4) show(); else finish2(); };
+        };
+        const finish2 = () => {
+          if (res.every(Boolean)) {
+            sfxWin(); keep(3);
+            say(ui, "「見事だ、しっかりと身についておる」", () => { o.remove(); godSeq(3, dev); });
+          } else {
+            const mama = dev ? false : godLossCount();
+            say(ui, "「勉強が足りぬ、次こそは我を超えてみろ」", () => { if (mama) { bgmStop(); o.remove(); specialOverlay(["mama"], boss); } else leave(); }, "もどる");
+          }
+        };
+        show();
+      }
+    }
+
+    // ---- 第3形態：最後の問い（どんな答えでも勝てる）----
+    function form3() {
+      const st = godStage(o, "p3 rise", GOD_IMG.b3, GOD_IMG.f3), ui = st.querySelector(".g-ui");
+      try { const a = ac(); if (a) { const t = a.currentTime; noise(t, 2.6, 0.22, 140); tone(t, 60, 120, 2.6, 0.3, "sine"); tone(t + 2.4, 300, 900, 0.8, 0.2, "triangle"); } } catch (e) {}
+      setTimeout(() => {
+        st.classList.remove("rise");
+        say(ui, "「さあ、最後の問いだ」", () => {
+          ui.innerHTML = `<div class="g-say">「汝、津山中学に行って何を成す？」</div><textarea id="gWish" rows="3" maxlength="200" placeholder="ここに答えを書こう"></textarea><div class="row" style="justify-content:center"><button class="primary" id="gAns" disabled>答える</button></div>`;
+          const ta = ui.querySelector("#gWish"), bt = ui.querySelector("#gAns");
+          ta.oninput = () => { bt.disabled = !ta.value.trim(); };
+          bt.onclick = () => {
+            if (!dev) { const b = B(); b.godWish = {text: ta.value.trim(), date: todayStr()}; persist(); }
+            const L = ["「そうか、それが汝の望みか」", "「ならば進め。汝の未来は、汝自身の手で切り拓くのだ。」", "「合格を祈っている」"];
+            let n = 0; const next = () => { if (n < L.length) say(ui, L[n++], next, n < L.length ? "つぎへ" : "終わる"); else clear(); }; next();
+          };
+        }, "答える準備ができた");
+      }, 3200);
+      const clear = () => {
+        sfxWin(); bgmStop();
+        const first = !dev && !bossWon("god");
+        if (!dev) { const g = st0.god = st0.god || {tries: 0}; g.won = g.won || todayStr(); delete g.phase; B().cleared = todayStr(); persist(); }
+        const bo = BOSSES.find(x => x.id === "god");
+        o.className = "bd-evo";
+        o.innerHTML = `<div class="box"><div class="bb-flash"></div><h2>神に認められた！</h2><div class="bb-appear"><img class="bb-img" alt="" src="${GOD_IMG.f3}"></div>${first ? `<div class="bd-rxp">称号GET：<b>${esc(bo.title)}</b></div>` : (dev ? '<div class="bd-rxp">開発者モード：記録は残していません</div>' : "")}<div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="gEnd">もどる</button></div></div>`;
+        o.querySelector("#gEnd").onclick = () => { o.remove(); boss(); };
+      };
+    }
+  }
+  const css3 = document.createElement("style");
+  css3.textContent = `
+  .g-stage{position:absolute;inset:0;background:#06102a center/cover no-repeat;overflow:hidden;color:#fff}
+  .g-boss{position:absolute;left:50%;transform:translateX(-50%);object-fit:contain;filter:drop-shadow(0 0 28px rgba(255,236,170,.7));pointer-events:none;-webkit-touch-callout:none;user-select:none}
+  .p2 .g-boss{top:1%;height:46%;max-width:96%;animation:bbFloat 4.2s ease-in-out infinite}
+  .p2 .g-boss.hit{animation:bbHit .9s ease-in-out}
+  .p3 .g-boss{top:-6%;height:auto;width:min(138vw,130vh);max-width:none;animation:gRise 3.2s ease-out both}
+  .p3:not(.rise) .g-boss{animation:bbFloat 5s ease-in-out infinite}
+  @keyframes gRise{0%{transform:translateX(-50%) scale(.12);opacity:0;filter:brightness(3) blur(8px)}60%{opacity:1}100%{transform:translateX(-50%) scale(1);opacity:1;filter:drop-shadow(0 0 28px rgba(255,236,170,.7))}}
+  .g-bolt{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .g-bolt polyline{fill:none;stroke:#e6f2ff;stroke-width:3;vector-effect:non-scaling-stroke;stroke-linejoin:round;filter:drop-shadow(0 0 6px #6fb2ff) drop-shadow(0 0 14px #9cc9ff)}
+  .g-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+  .g-flash.go{animation:gFlash .55s ease-out}
+  @keyframes gFlash{0%{opacity:.95}100%{opacity:0}}
+  .g-stage.quake{animation:gQuake .4s linear}
+  @keyframes gQuake{0%,100%{transform:none}20%{transform:translate(-6px,4px)}40%{transform:translate(6px,-4px)}60%{transform:translate(-4px,-3px)}80%{transform:translate(4px,3px)}}
+  .g-ui{position:absolute;left:0;right:0;bottom:0;padding:14px 14px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(6,14,40,0),rgba(6,14,40,.82) 22%,rgba(6,14,40,.92));max-height:62%;overflow:auto}
+  .g-say{font-size:19px;font-weight:700;line-height:1.6;text-align:center;margin:8px 4px 12px;text-shadow:0 2px 6px #000}
+  .g-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .g-dots{display:flex;gap:6px}.g-dots i{width:16px;height:16px;border-radius:50%;background:#3a3f55;display:block}.g-dots i.ok{background:#4cc38a}.g-dots i.ng{background:#ff5a5a}
+  .g-time{height:8px;border-radius:4px;background:#2a3050;overflow:hidden;margin-bottom:6px}.g-time i{display:block;height:100%;width:100%;background:#ffd23a}
+  .g-q{font-size:17px;line-height:1.6;margin:6px 0 10px;text-shadow:0 1px 4px #000}
+  .g-ch{display:grid;grid-template-columns:1fr;gap:8px}
+  .g-ch button{display:flex;gap:10px;align-items:center;text-align:left;font-size:16px;padding:12px 14px;border-radius:12px;background:rgba(255,255,255,.92);color:#16203a;border:2px solid transparent}
+  .g-ch button span{flex:none;width:26px;height:26px;border-radius:50%;background:#2f5fb3;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .g-ch button.right{background:#c9f5dc;border-color:#2e9e62}.g-ch button.wrong{background:#ffd9d9;border-color:#e05252}
+  .g-fb{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(0,0,0,.55);font-size:15px;line-height:1.55}.g-fb.ok b{color:#6df0a8}.g-fb.ng b{color:#ff8a8a}
+  #gWish{width:100%;box-sizing:border-box;font-size:17px;padding:10px;border-radius:12px;border:2px solid #9cc9ff;background:rgba(255,255,255,.95);color:#16203a;margin-bottom:10px}
+  `;
+  document.head.appendChild(css3);
+
   /* ---------- 開発者モード（保護者用：条件に関係なくBOSS・神と戦って、演出を確認できる。記録は残らない）---------- */
   let devMode = false;
   function devHelperPool() { return SPECIALS.map(specialHelper).concat(TYPE_ORDER.map(t => friendHelper(t, "t_" + t))); }
@@ -1005,10 +1190,11 @@ window.BUDDY_CFG = {
       if (isNext) return `<div class="card bb-row now"><img src="${x.img}" alt="" draggable="false"><div><b>${esc(x.n)}</b><br><span class="muted">「${esc(x.appear)}」</span>${god && friendCount() < 1 ? '<br><span class="muted">お助けキャラが いないと、勝てないかも…</span>' : ""}<br><button class="primary" data-boss="${x.id}" style="margin-top:8px">${god ? "神に挑戦" : "挑戦する"}</button></div></div>`;
       return `<div class="card bb-row lock"><img src="${BLANK}" alt="" draggable="false"><div><b>？？？</b><br><span class="muted">前のBOSSを倒すと 現れる</span></div></div>`;
     }).join("");
-    const dv = devMode ? `<div class="card" style="border:2px dashed #b36bff"><b>開発者モード ON</b><p class="note" style="margin:4px 0 8px">条件に関係なく、どのBOSSとも戦えます。結果は記録されません。</p><div class="row">${BOSSES.map(x => `<button class="primary small" data-dev="${x.id}">${esc(x.n)}と戦う</button>`).join("")}</div><div class="row" style="margin-top:8px"><button class="small" id="dvDesc">神降臨の演出を見る</button><button class="small" id="dvTbc">To Be Continued を見る</button></div></div>` : "";
+    const dv = devMode ? `<div class="card" style="border:2px dashed #b36bff"><b>開発者モード ON</b><p class="note" style="margin:4px 0 8px">条件に関係なく、どのBOSSとも戦えます。結果は記録されません。</p><div class="row">${BOSSES.map(x => `<button class="primary small" data-dev="${x.id}">${esc(x.n)}と戦う</button>`).join("")}</div><div class="row" style="margin-top:8px"><button class="small" id="dvDesc">神降臨の演出を見る</button><button class="small" data-gseq="2">神・第2形態を見る</button><button class="small" data-gseq="3">神・第3形態を見る</button><button class="small" id="dvTbc">To Be Continued を見る</button></div></div>` : "";
     $("#app").innerHTML = `<p class="muted">キャラクターを育てて、BOSSに挑戦しよう。負けても、失うものは 何もないよ。</p>${dv}${rows}${b.cleared ? '<div class="card" style="text-align:center"><b>To Be Continued...</b></div>' : ""}${titlesHTML()}`;
     document.querySelectorAll("[data-boss]").forEach(el => { el.onclick = () => bossFight(el.dataset.boss); });
     document.querySelectorAll("[data-dev]").forEach(el => { el.onclick = () => devSelect(el.dataset.dev); });
+    document.querySelectorAll("[data-gseq]").forEach(el => { el.onclick = () => { ac(); bgmStart("bgm_god.mp3"); godSeq(+el.dataset.gseq, true); }; });
     const d1 = document.getElementById("dvDesc"); if (d1) d1.onclick = () => godDescent(true);
     const d2 = document.getElementById("dvTbc"); if (d2) d2.onclick = () => toBeContinued(true);
   }
@@ -1114,6 +1300,6 @@ window.BUDDY_CFG = {
   document.head.appendChild(css2);
 
   function check() { const evs = evaluate(); if (evs.length) setTimeout(() => evoOverlay(evs), 500); }
-  window.Buddy = {isDev: () => devMode, boss, bossCheck, friendCount, rewardOverlay, check, init, card, page, codex, complete, graded, status, form, proficiency, subjOf, lap, evaluate, decideType, TYPES, SUBJ, SUBJN};
+  window.Buddy = {godQ: GODQ, isDev: () => devMode, boss, bossCheck, friendCount, rewardOverlay, check, init, card, page, codex, complete, graded, status, form, proficiency, subjOf, lap, evaluate, decideType, TYPES, SUBJ, SUBJN};
   try { init(); } catch (e) {}
 })();
