@@ -94,6 +94,7 @@ textarea.out{min-height:220px;font-size:15px;line-height:1.5}
 </section>
 
 <script src="problems.js"></script>
+<script src="mocks.js"></script>
 <script src="buddy.js"></script>
 <script>
 "use strict";
@@ -107,7 +108,9 @@ db.results = db.results || []; db.mocks = db.mocks || []; db.subs = db.subs || [
 function persist(){ try { localStorage.setItem(LS, JSON.stringify(db)); } catch(e) {} }
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const today = () => { const d = new Date(); return d.getFullYear() + "/" + (d.getMonth()+1) + "/" + d.getDate(); };
-const byId = id => P.find(p => p.id === id);
+const PM = window.MOCKS || [];   // 模擬試験専用の問題（練習問題とは別）
+const byId = id => P.find(p => p.id === id) || PM.find(p => p.id === id);
+const mfield = p => String(p.unit).replace(/（.*）/, "");
 const qMax = q => q.rubric.reduce((a,r) => a + r[1], 0);
 const maxOf = p => p.qs.reduce((a,q) => a + qMax(q), 0);
 const lastOf = pid => { const r = db.results.filter(x => x.pid === pid); return r[r.length-1]; };
@@ -115,8 +118,8 @@ const stars = n => '<span class="stars" aria-label="難度'+n+'">'+"★".repeat(
 const pctCls = v => v >= 80 ? "good" : v >= 60 ? "mid" : "bad";
 const pct = r => Math.round(r.score / r.max * 100);
 function badge(pid){ const r = lastOf(pid); const L = window.Buddy ? Buddy.lap() : 1; return r ? '<span class="badge '+pctCls(pct(r))+'">'+((r.lap||1) < L ? "前の周 " : "前回 ")+r.score+'/'+r.max+'点</span>' : '<span class="badge">未着手</span>'; }
-const nPend = () => db.subs.filter(s => s.state === "pending").length;
-const nSent = () => db.subs.filter(s => s.state === "sent").length;
+const nPend = (m) => db.subs.filter(s => s.state === "pending" && !!s.mock === !!m).length;
+const nSent = (m) => db.subs.filter(s => s.state === "sent" && !!s.mock === !!m).length;
 
 let timerId = null, cur = null;
 function stopTimer(){ if (timerId) { clearInterval(timerId); timerId = null; } }
@@ -166,7 +169,7 @@ const collect = pi => cur.ps[pi].qs.map((q,i) => { const t = document.querySelec
 function home(){
   if (window.Buddy) setTimeout(() => Buddy.check(), 400);
   title("適性検査トレーニング"); setHdr(""); showFab(false);
-  const n = db.results.length, pe = nPend(), se = nSent();
+  const n = db.results.length, pe = nPend(), se = nSent(), mpe = nPend(true), mse = nSent(true);
   $("#app").innerHTML = `
   ${window.__loadBroken ? '<div class="msg">保存データを読み込めませんでした。元のデータはバックアップとして残してあります。お手数ですが、保護者の方にお知らせください。</div>' : ""}
   ${window.Buddy ? Buddy.card() : ""}
@@ -178,12 +181,15 @@ function home(){
     <button class="card tile" data-go="#list/japanese"><b>国語</b><span>${cntOf("japanese")}</span></button>
     <button class="card tile" data-go="#list/society"><b>社会</b><span>${cntOf("society")}</span></button>
   </div>
-  <h2>45分 模擬</h2>
+  <h2>適性検査 模擬試験</h2>
   <div class="grid">
-    <button class="card tile" data-go="#mock/I"><b>Ⅰ 模擬（45分）</b><span>3つの課題をタイマー付きで</span></button>
-    <button class="card tile" data-go="#mock/II"><b>Ⅱ 模擬（45分）</b><span>国語・作文・社会の3課題</span></button>
+    <button class="card tile" data-go="#mock/I"><b>適性検査Ⅰ</b><span>算数・理科の3課題（45分）</span></button>
+    <button class="card tile" data-go="#mock/II"><b>適性検査Ⅱ</b><span>国語・作文・社会の3課題（45分）</span></button>
   </div>
-  <h2>親に送る・採点を受け取る</h2>
+  <div class="grid">
+    <button class="card tile" data-go="#mscore"><b>模擬試験の採点${mpe||mse ? '　<span class="badge bad">送信待ち '+mpe+'・採点待ち '+mse+'</span>' : ""}</b><span>模擬試験の答案を送り、結果を入れる</span></button>
+  </div>
+  <h2>練習の採点（親に送る・採点を受け取る）</h2>
   <div class="grid">
     <button class="card tile" data-go="#inbox"><b>送信・採点${pe||se ? '　<span class="badge bad">送信待ち '+pe+'・採点待ち '+se+'</span>' : ""}</b><span>解いた問題をまとめて送り、結果を入れる</span></button>
   </div>
@@ -194,7 +200,7 @@ function home(){
   <p class="note" id="homeNote" style="margin-top:28px;user-select:none;-webkit-user-select:none">記録はこのiPadの中だけに保存されます。ブラウザのデータを消すと記録も消えます。</p><div id="parentBox"></div>`;
   // 保護者メニュー：この注意書きを3秒以内に5回タップすると出る（子どもの目にふれにくくする）
   let tn = 0, t0 = 0;
-  $("#homeNote").onclick = () => { const now = Date.now(); if (now - t0 > 3000) tn = 0; t0 = now; if (++tn >= 5) { tn = 0; window.__parent = true; $("#parentBox").innerHTML = `<h2>保護者メニュー</h2><div class="grid"><button class="card tile" data-go="#weak"><b>得意・不得意</b><span>分野ごとの得点率</span></button><button class="card tile" data-go="#stats"><b>成績</b><span>${n}回分の記録</span></button></div><div class="row" style="margin-top:8px"><button id="parentHide">メニューを閉じる</button></div>`; $("#parentHide").onclick = () => { window.__parent = false; $("#parentBox").innerHTML = ""; }; $("#parentBox").scrollIntoView({behavior:"smooth", block:"center"}); } };
+  $("#homeNote").onclick = () => { const now = Date.now(); if (now - t0 > 3000) tn = 0; t0 = now; if (++tn >= 5) { tn = 0; window.__parent = true; $("#parentBox").innerHTML = `<h2>保護者メニュー</h2><div class="grid"><button class="card tile" data-go="#weak"><b>得意・不得意（練習）</b><span>分野ごとの得点率</span></button><button class="card tile" data-go="#stats"><b>成績（練習）</b><span>${n}回分の記録</span></button><button class="card tile" data-go="#mweak"><b>模擬試験の弱点分析</b><span>${db.mocks.filter(m => m.tasks && !m.partial).length}回分の記録</span></button></div><div class="row" style="margin-top:8px"><button id="parentHide">メニューを閉じる</button></div>`; $("#parentHide").onclick = () => { window.__parent = false; $("#parentBox").innerHTML = ""; }; $("#parentBox").scrollIntoView({behavior:"smooth", block:"center"}); } };
 }
 
 const SUBJT = {math:"算数", science:"理科", japanese:"国語", society:"社会"};
@@ -276,18 +282,18 @@ function applyAuto(){
 function ensureSub(pi){
   cur.subs = cur.subs || {};
   const p = cur.ps[pi], ans = collect(pi);
-  if (!cur.subs[pi]) { const s = {id:uid(), pid:p.id, date:today(), answers:ans, state:"pending"}; db.subs.push(s); cur.subs[pi] = s; }
+  if (!cur.subs[pi]) { const s = {id:uid(), pid:p.id, date:today(), answers:ans, state:"pending"}; if (cur.mode === "mock") { s.mock = true; s.mid = cur.mid; s.setId = cur.setId; s.msub = cur.sub; s.used = cur.used; } db.subs.push(s); cur.subs[pi] = s; }
   else cur.subs[pi].answers = ans;
   return cur.subs[pi];
 }
 function queueAll(){
   cur.ps.forEach((p,i) => ensureSub(i));
   persist();
-  if (window.Buddy) Buddy.complete(cur.ps.map(p => p.id), {});
+  if (window.Buddy) { if (cur.mode === "mock") Buddy.mockDone(cur.sub, cur.setId); else Buddy.complete(cur.ps.map(p => p.id), {}); }
 }
 function afterQueued(){
   const m = $("#qmsg"); if (!m) return;
-  m.innerHTML = '送信待ちに入れました。<button class="small" data-go="#inbox">送信・採点へ</button>';
+  m.innerHTML = '送信待ちに入れました。<button class="small" data-go="' + (cur && cur.mode === "mock" ? "#mscore" : "#inbox") + '">' + (cur && cur.mode === "mock" ? "模擬試験の採点へ" : "送信・採点へ") + '</button>';
   m.classList.remove("hide");
 }
 
@@ -302,27 +308,34 @@ function practice(id){
   bindPanel($("#panel"));
 }
 
-function mockStart(sub){
-  title(SUBN[sub].replace(/（.*）/,"")+" 模擬"); showFab(false);
-  const slots = ["k1","k2","k3"];
-  const ids = slots.map(s => {
-    const pool = P.filter(p => p.sub === sub && p.slot === s);
-    const fresh = pool.filter(p => !lastOf(p.id));
-    const from = fresh.length ? fresh : pool;
-    return from[Math.floor(Math.random()*from.length)];
-  }).filter(Boolean);
+function mockStart(sub, setNo){
+  title(SUBN[sub].replace(/（.*）/,"") + " 模擬試験"); showFab(false);
+  const sets = [...new Set(PM.filter(p => p.sub === sub).map(p => p.set))].sort((x,y) => x-y);
+  if (!sets.length) { $("#app").innerHTML = '<div class="card"><p>この模擬試験は準備中です。</p><button data-go="#">ホームへ</button></div>'; return; }
+  const recs = n => db.mocks.filter(m => m.sub === sub && m.setId === n && m.tasks && !m.partial);
+  if (!setNo) {
+    $("#app").innerHTML = `<div class="card"><h3>${esc(SUBN[sub])} 模擬試験：回を選ぼう</h3><p class="note">本番と同じ形の専用問題です（練習問題とは別）。1回45分。</p>
+    ${sets.map(n => { const r = recs(n), best = r.reduce((a,m) => Math.max(a, m.pct), -1); return `<div class="row"><button class="primary" data-go="#mock/${sub}/${n}">第${n}回</button><span class="muted">${r.length ? r.length+"回挑戦・最高 "+best+"％" : "まだ未挑戦"}</span></div>`; }).join("")}
+    <div class="row"><button data-go="#">戻る</button></div></div>`;
+    return;
+  }
+  setNo = +setNo;
+  const ids = ["k1","k2","k3"].map(k => PM.find(p => p.sub === sub && p.set === setNo && p.slot === k)).filter(Boolean);
+  if (!ids.length) return home();
   const total = ids.reduce((a,p) => a + maxOf(p), 0);
-  $("#app").innerHTML = `<div class="card"><h3>${esc(SUBN[sub])} 模擬検査</h3>
-  <p>制限時間は <b>45分</b>。課題は${ids.length}つです（合計 ${total}点）。<br>始める前に、鉛筆と消しゴム、計算用紙（またはメモ機能）を用意しよう。</p>
-  <p class="note">まだ解いていない問題を優先して出します。時間が来たら自動で答え合わせの画面になります。</p>
-  <div class="row"><button class="primary" id="go">スタート</button><button data-go="#">中止</button></div></div>`;
-  $("#go").onclick = () => mockRun(sub, ids);
+  const mins = p => p.qs.reduce((a,q) => a + (q.t || 0), 0);
+  $("#app").innerHTML = `<div class="card"><h3>${esc(SUBN[sub])} 模擬試験　第${setNo}回</h3>
+  <p>制限時間は <b>45分</b>。課題は${ids.length}つ（合計 ${total}点・<b>70点満点に換算</b>）です。</p>
+  <div class="card">${ids.map((p,i) => `<div class="row"><b>課題${i+1}</b><span>${esc(mfield(p))}</span><span class="spacer"></span><span class="muted">目安 ${mins(p)}分</span></div>`).join("")}</div>
+  <p class="note">目安は、課題ごとの「考える・書く」時間です。問題文を読む時間もあるので、時間配分に気をつけよう。難しい問いは、後回しにしてもOK。<br>始める前に、鉛筆と消しゴム、計算用紙（またはメモ機能）を用意しよう。時間が来たら自動で答え合わせの画面になります。</p>
+  <div class="row"><button class="primary" id="go">スタート</button><button data-go="#mock/${sub}">回を選びなおす</button></div></div>`;
+  $("#go").onclick = () => mockRun(sub, ids, setNo);
 }
 
-function mockRun(sub, ids){
-  cur = {ps:ids, mode:"mock", sub, saved:false, subs:{}, end: Date.now() + 45*60*1000, phase:"solve"};
+function mockRun(sub, ids, setNo){
+  cur = {ps:ids, mode:"mock", sub, setId:setNo, mid:uid(), saved:false, subs:{}, end: Date.now() + 45*60*1000, phase:"solve"};
   showFab(true); setHdr('<span class="timer" id="tm">45:00</span>');
-  $("#app").innerHTML = `<div class="tabs" id="tabs">${ids.map((p,i)=>`<button data-tab="${i}" class="${i?'':'on'}">課題${i+1}</button>`).join("")}</div>
+  $("#app").innerHTML = `<div class="tabs" id="tabs">${ids.map((p,i)=>`<button data-tab="${i}" class="${i?'':'on'}">課題${i+1}<small> 目安${p.qs.reduce((a,q)=>a+(q.t||0),0)}分</small></button>`).join("")}</div>
   <div id="panel">${ids.map((p,i)=>`<div class="mp ${i?'hide':''}" data-mp="${i}">${sceneHTML(p)}${qHTML(p,i)}</div>`).join("")}
   <div class="row" style="margin-top:16px" id="fin"><button class="primary" id="finish">終了して答え合わせへ</button></div>
   <div id="after" class="hide card" style="margin-top:14px"><div id="sc"></div>
@@ -355,8 +368,8 @@ function htmlToText(h){
   d.querySelectorAll("p,li,div,h3").forEach(e => e.append("\n"));
   return d.textContent.replace(/\n{3,}/g, "\n\n").trim();
 }
-function buildText(list){
-  let t = "【適性検査 採点のお願い】\n"
+function buildText(list, mock){
+  let t = (mock ? "【適性検査 模擬試験 採点のお願い】\n本番と同じ形式（45分・3課題）の模擬試験です。各課題の配点の合計を70点満点に換算した点数も、最後に一言で書いてください。\n" : "【適性検査 採点のお願い】\n")
    + "次の解答を、各設問の採点基準で採点し、解説を付けてください。\n"
    + "・設問ごとに得点を出し、できている点と直す点を、小学6年生に分かりやすく説明する。\n"
    + "・採点基準と違うやり方でも、考え方が正しければ得点にする。\n"
@@ -385,8 +398,8 @@ async function shareText(text){
   try { await navigator.clipboard.writeText(text); return "copied"; } catch(e) {}
   return "manual";
 }
-async function sendSubs(list){
-  const box = $("#outbox"); const text = buildText(list);
+async function sendSubs(list, mock){
+  const box = $("#outbox"); const text = buildText(list, mock);
   box.innerHTML = `<div class="card" style="margin-top:12px"><b>送る文章</b><p class="muted">送れなかったときは、ここからコピーしてLINEなどに貼ってください。</p><textarea class="out" id="outt" readonly></textarea><div class="row" style="margin-top:8px"><button id="cpy" class="small">コピーする</button><button id="mk" class="small hide">送った（採点待ちにする）</button></div><div id="omsg" class="msg hide"></div></div>`;
   $("#outt").value = text;
   const say = (m, err) => { const o = $("#omsg"); o.textContent = m; o.classList.remove("hide"); o.classList.toggle("err", !!err); };
@@ -394,11 +407,28 @@ async function sendSubs(list){
   $("#cpy").onclick = async () => { try { await navigator.clipboard.writeText(text); say("コピーしました。"); } catch(e) { const t = $("#outt"); t.select(); say("文章を選択しました。長押しでコピーしてください。"); } };
   $("#mk").onclick = () => { mark(); inbox(); };
   const r = await shareText(text);
-  if (r === "shared" || r === "copied") { mark(); say(r === "copied" ? "コピーしました。LINEなどに貼って送ってください。採点待ちに移しました。" : "送りました。採点待ちに移しました。"); setTimeout(() => { if (location.hash === "#inbox") { const keep = $("#outt") && text; inbox(true); } }, 1500); }
+  if (r === "shared" || r === "copied") { mark(); say(r === "copied" ? "コピーしました。LINEなどに貼って送ってください。採点待ちに移しました。" : "送りました。採点待ちに移しました。"); setTimeout(() => { if (location.hash === (mock ? "#mscore" : "#inbox")) { inbox(true, mock); } }, 1500); }
   else if (r === "manual") { $("#mk").classList.remove("hide"); say("自動で送れませんでした。上の文章をコピーして送り、その後「送った」を押してください。", true); }
   else say("送信をやめました。まだ送信待ちのままです。");
 }
-function applyResult(raw){
+// 模擬試験：親の採点を、その回の記録（db.mocks）に入れる。練習の記録（results）には入れない
+function mockRecompute(rec){
+  const need = PM.filter(p => p.sub === rec.sub && p.set === rec.setId).length;
+  rec.score = rec.tasks.reduce((a,t) => a + t.score, 0); rec.max = rec.tasks.reduce((a,t) => a + t.max, 0);
+  rec.partial = need > 0 && rec.tasks.length < need;   // 課題がそろうまでは「一部のみ」
+  rec.pct = rec.max ? Math.round(rec.score / rec.max * 100) : 0; rec.pt70 = rec.max ? Math.round(rec.score / rec.max * 70) : 0;
+  rec.src = rec.tasks.every(t => t.parent) ? "parent" : "self";
+}
+function mockGrade(p, sub, items, score, tot){
+  let rec = sub && sub.mid ? db.mocks.find(m => m.id === sub.mid) : null;
+  if (!rec) { rec = {id: sub && sub.mid || uid(), date: sub ? sub.date : today(), sub: p.sub, setId: p.set, used: sub ? sub.used : undefined, lap: (window.Buddy ? Buddy.lap() : 1), tasks: []}; db.mocks.push(rec); }
+  let t = rec.tasks.find(x => x.pid === p.id);
+  if (!t) { t = {pid: p.id}; rec.tasks.push(t); }
+  else if (!t.parent && t.items) t.self = {score: t.score, items: t.items};
+  t.parent = true; t.score = score; t.max = tot; t.items = items;
+  mockRecompute(rec);
+}
+function applyResult(raw, mock){
   const t = String(raw).normalize("NFKC");
   const m = [...t.matchAll(/結果\s*[:：]\s*([^\n]+)/g)];
   const body = m.length ? m[m.length-1][1] : t;
@@ -407,6 +437,7 @@ function applyResult(raw){
     const mm = ent.match(/^([A-Za-z0-9\-]+)\s*=\s*([0-9.,\s]+)$/);
     if (!mm) { ng.push("読み取れません：" + ent); return; }
     const p = byId(mm[1]); if (!p) { ng.push("問題が見つかりません：" + mm[1]); return; }
+    if (PM.some(x => x.id === p.id) !== !!mock) { ng.push(p.title + "：" + (mock ? "これは練習問題です。ホームの「送信・採点」に入れてください" : "これは模擬試験の問題です。ホームの「模擬試験の採点」に入れてください")); return; }
     const nums = mm[2].split(",").map(x => x.trim()).filter(x => x !== "").map(Number);
     const qm = p.qs.map(qMax), tot = qm.reduce((a,b) => a + b, 0);
     let items;
@@ -417,6 +448,10 @@ function applyResult(raw){
     const score = items.reduce((a,b) => a + b, 0);
     const cand = db.subs.filter(s => s.pid === p.id && s.state !== "graded"); let sub = cand[cand.length-1] || null;
     if (!sub) { const g = db.subs.filter(s => s.pid === p.id && s.state === "graded"); sub = g[g.length-1] || null; }
+    if (mock) {
+      mockGrade(p, sub, items, score, tot); if (sub) { sub.state = "graded"; sub.score = score; sub.max = tot; }
+      ok.push(p.title + "：" + score + " / " + tot + "点"); return;
+    }
     let selfInfo = null;
     if (sub) { const old = db.results.find(r => r.sid === sub.id); if (old) selfInfo = old.src === "self" ? {score:old.score, items:old.items} : (old.self || null); db.results = db.results.filter(r => r.sid !== sub.id); }
     db.results.push({lap:(window.Buddy?Buddy.lap():1), pid:p.id, date:today(), score, max:tot, mode:"parent", src:"parent", items, sid: sub ? sub.id : null, self: selfInfo});
@@ -424,16 +459,19 @@ function applyResult(raw){
     gl.push({sid: sub ? sub.id : null, pid: p.id, score, max: tot, self: selfInfo ? {score: selfInfo.score, max: tot} : null});
     ok.push(p.title + "：" + score + " / " + tot + "点");
   });
-  persist(); if (window.Buddy && gl.length) Buddy.graded(gl);
+  persist(); if (window.Buddy && gl.length && !mock) Buddy.graded(gl);
   return {ok, ng};
 }
-function inbox(keepMsg){
-  title("送信・採点"); setHdr(""); showFab(false);
-  const pend = db.subs.filter(s => s.state === "pending"), sent = db.subs.filter(s => s.state === "sent");
-  const done = db.subs.filter(s => s.state === "graded").slice(-8).reverse();
-  const nm = s => { const p = byId(s.pid); return p ? esc(p.title) : esc(s.pid); };
+function inbox(keepMsg, mock){
+  mock = !!mock; title(mock ? "模擬試験の採点" : "送信・採点"); setHdr(""); showFab(false);
+  const mine = s => !!s.mock === mock;
+  const pend = db.subs.filter(s => s.state === "pending" && mine(s)), sent = db.subs.filter(s => s.state === "sent" && mine(s));
+  const done = db.subs.filter(s => s.state === "graded" && mine(s)).slice(-8).reverse();
+  const nm = s => { const p = byId(s.pid); return (s.mock ? esc(SUBN[s.msub].replace(/（.*）/,"")) + " 第" + s.setId + "回　" : "") + (p ? esc(p.title) : esc(s.pid)); };
   const diffHTML = s => {
-    const p = byId(s.pid), r = db.results.find(x => x.sid === s.id && x.src === "parent"); if (!p || !r) return "";
+    const p = byId(s.pid); let r = db.results.find(x => x.sid === s.id && x.src === "parent");
+    if (s.mock) { const rec = db.mocks.find(m => m.id === s.mid), t = rec && rec.tasks.find(x => x.pid === s.pid); r = t && t.parent ? {items: t.items, self: t.self} : null; }
+    if (!p || !r) return "";
     if (!r.self) return '<div class="muted">自己採点はしていません</div>';
     const rows = p.qs.map((q,i) => { const a = r.self.items[i] || 0, b = r.items[i] || 0, d = b - a, mx = qMax(q);
       const lab = d === 0 ? "同じ" : d < 0 ? "自己採点が甘かった（" + d + "点）" : "自己採点が辛かった（＋" + d + "点）";
@@ -445,7 +483,7 @@ function inbox(keepMsg){
   <h2>① 親に送る</h2>
   <div class="card">
     ${pend.length ? pend.map(s => `<div class="sub"><span class="t"><b>${nm(s)}</b><br><span class="muted">${esc(s.date)} に解いた</span></span><button class="small" data-del="${s.id}">取り消す</button></div>`).join("") : '<p class="muted" style="margin:0">送信待ちの問題はありません。問題を解いて「送信待ちにする」を押すと、ここに入ります。</p>'}
-    <div class="row" style="margin-top:12px"><button class="primary" id="sendAll" ${pend.length ? "" : "disabled"}>まとめて送る（${pend.length}題）</button></div>
+    <div class="row" style="margin-top:12px"><button class="primary" id="sendAll" ${pend.length ? "" : "disabled"}>まとめて送る（${pend.length}${mock ? "課題" : "題"}）</button></div>
     <div id="outbox"></div>
   </div>
   <h2>② 採点待ち</h2>
@@ -456,26 +494,26 @@ function inbox(keepMsg){
   <h2>③ 採点結果を入れる</h2>
   <div class="card">
     <p class="muted" style="margin-top:0">返ってきた文章の最後にある「結果:…」の行を、貼り付けてください。</p>
-    <textarea id="rc" rows="3" placeholder="結果:I-M4-01=2,4,6;II-W1-01=8"></textarea>
+    <textarea id="rc" rows="3" placeholder="${mock ? "結果:MI-1-1=2,3,2,3,2,2,2;MI-1-2=…" : "結果:I-M4-01=2,4,6;II-W1-01=8"}"></textarea>
     <div class="row" style="margin-top:8px"><button class="primary" id="applyRc">反映する</button></div>
     <div id="rcmsg"></div>
   </div>
   <h2>採点済み（最近）</h2>
-  <div class="card">${done.length ? done.map(s => `<div class="sub" style="display:block"><div class="row"><b class="t">${nm(s)}</b><span class="badge ${pctCls(Math.round(s.score/s.max*100))}">${s.score}/${s.max}点</span></div>${diffHTML(s)}</div>`).join("") : '<p class="muted" style="margin:0">まだありません。</p>'}</div>`;
-  $("#sendAll").onclick = () => sendSubs(pend);
-  const rs = $("#resend"); if (rs) rs.onclick = () => sendSubs(sent);
+  ${mock ? mockDoneHTML() : ""}<div class="card">${done.length ? done.map(s => `<div class="sub" style="display:block"><div class="row"><b class="t">${nm(s)}</b><span class="badge ${pctCls(Math.round(s.score/s.max*100))}">${s.score}/${s.max}点</span></div>${diffHTML(s)}</div>`).join("") : '<p class="muted" style="margin:0">まだありません。</p>'}</div>`;
+  $("#sendAll").onclick = () => sendSubs(pend, mock);
+  const rs = $("#resend"); if (rs) rs.onclick = () => sendSubs(sent, mock);
   $("#applyRc").onclick = () => {
     const raw = $("#rc").value; if (!raw.trim()) { $("#rcmsg").innerHTML = '<div class="msg err">結果の行を貼り付けてください。</div>'; return; }
-    const r = applyResult(raw);
+    const r = applyResult(raw, mock);
     $("#rcmsg").innerHTML = (r.ok.length ? '<div class="msg">' + r.ok.map(esc).join("<br>") + '<br>を記録しました。</div>' : "") + (r.ng.length ? '<div class="msg err">' + r.ng.map(esc).join("<br>") + "</div>" : "");
-    if (r.ok.length) { $("#rc").value = ""; setTimeout(() => { const keep = $("#rcmsg").innerHTML; inbox(true); $("#rcmsg").innerHTML = keep; }, 50); }
+    if (r.ok.length) { $("#rc").value = ""; setTimeout(() => { const keep = $("#rcmsg").innerHTML; inbox(true, mock); $("#rcmsg").innerHTML = keep; }, 50); }
   };
-  document.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { if (!confirm("この解答を送信待ちから取り消します。よろしいですか？")) return; db.subs = db.subs.filter(s => s.id !== b.dataset.del); persist(); inbox(); });
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { if (!confirm("この解答を送信待ちから取り消します。よろしいですか？")) return; db.subs = db.subs.filter(s => s.id !== b.dataset.del); persist(); inbox(false, mock); });
 }
 
 function stats(){
   title("成績"); setHdr(""); showFab(false);
-  if (!db.results.length) { $("#app").innerHTML = '<div class="card">まだ記録がありません。問題を解いて「記録する」を押してみよう。</div>'; return; }
+  if (!db.results.length) { $("#app").innerHTML = '<div class="card">まだ記録がありません。問題を解いて「記録する」を押してみよう。</div>' + (db.mocks.length ? '<div class="card"><p class="note" style="margin:0 0 8px">模擬試験の記録と弱点分析は、練習とは別に見られます。</p><button data-go="#mweak">模擬試験の弱点分析へ</button></div>' : ""); return; }
   const per = {};
   db.results.forEach(r => { const p = byId(r.pid); if (!p) return; const k = p.sub+"|"+p.unit; (per[k] = per[k] || {sub:p.sub, unit:p.unit, s:0, m:0, n:0}); per[k].s += r.score; per[k].m += r.max; per[k].n++; });
   let h = "";
@@ -488,7 +526,7 @@ function stats(){
   let hi = 0, lo = 0, same = 0;
   db.results.forEach(r => { if (r.src !== "parent" || !r.self) return; const p = byId(r.pid); if (!p) return; p.qs.forEach((q,i) => { const a = r.self.items[i] || 0, b = r.items[i] || 0; if (a > b) hi++; else if (a < b) lo++; else same++; }); });
   if (hi + lo + same) h += `<h2>自己採点と親の採点の違い</h2><div class="card"><div class="row"><span>自己採点が甘かった設問</span><span class="spacer"></span><b>${hi}</b></div><div class="row"><span>同じだった設問</span><span class="spacer"></span><b>${same}</b></div><div class="row"><span>自己採点が辛かった設問</span><span class="spacer"></span><b>${lo}</b></div><p class="note" style="margin:8px 0 0">「甘かった」が多いときは、答えの例や採点基準を、もう一度見比べる練習をしよう。</p></div>`;
-  if (db.mocks.length) { h += '<h2>模擬の記録</h2><div class="card">'+db.mocks.slice().reverse().slice(0,10).map(m => `<div class="row"><span>${esc(m.date)}</span><b>${esc(m.sub==="I"?"Ⅰ":"Ⅱ")}</b><span class="spacer"></span><span class="badge ${pctCls(m.pct)}">${m.score}/${m.max}点（${m.pct}％）</span><span class="muted">${m.used}分</span></div>`).join("")+'</div>'; }
+  if (db.mocks.length) h += '<div class="card"><p class="note" style="margin:0 0 8px">模擬試験の記録と弱点分析は、練習とは別に見られます。</p><button data-go="#mweak">模擬試験の弱点分析へ</button></div>';
   h += '<p class="note">得点率が低い単元から、復習リストで練習しよう。親の採点が戻った問題は、親の採点が成績に反映されます。</p><div class="row"><button id="rst">記録を全部消す</button></div>';
   $("#app").innerHTML = h;
   $("#rst").onclick = () => { if (confirm("記録を全部消します。元に戻せません。よろしいですか？")) { db = {results:[], mocks:[], subs:[]}; persist(); stats(); } };
@@ -545,6 +583,53 @@ function weak(){
   $("#wcopy").onclick = async () => { const t = weakText(); try { await navigator.clipboard.writeText(t); $("#wcopy").textContent = "コピーしました ✓"; } catch (e) { const a = $("#wtxt"); a.value = t; a.style.display = "block"; a.select(); $("#wcopy").textContent = "下の文章をコピーしてください"; } };
 }
 
+
+/* ---------- 模擬試験：採点済みの回／弱点分析（練習とは完全に別） ---------- */
+const mockLabel = m => SUBN[m.sub].replace(/（.*）/,"") + (m.setId ? " 第" + m.setId + "回" : "");
+const mockStateLabel = m => m.partial ? "一部の課題のみ採点" : (m.src === "parent" ? "親の採点" : "自己採点");
+function mockDoneHTML(){
+  const rows = db.mocks.filter(m => m.tasks).slice().reverse().slice(0, 8);
+  if (!rows.length) return "";
+  return '<div class="card">' + rows.map(m => `<div class="sub" style="display:block"><div class="row"><b class="t">${esc(mockLabel(m))}</b><span class="muted">${esc(m.date)}</span><span class="spacer"></span>${m.partial ? '<span class="badge">一部のみ</span>' : `<span class="badge ${pctCls(m.pct)}">${m.pt70}/70点（${m.pct}％）</span>`}</div><div class="muted">${mockStateLabel(m)}${m.used != null ? "　" + m.used + "分" : ""}</div></div>`).join("") + '</div>';
+}
+function mockWeakData(){
+  const recs = db.mocks.filter(m => m.tasks && !m.partial), F = {}, pos = [[0,0],[0,0],[0,0]];
+  recs.forEach(m => m.tasks.forEach(t => {
+    const p = byId(t.pid); if (!p) return;
+    const k = m.sub + "|" + mfield(p), f = F[k] = F[k] || {sub: m.sub, name: mfield(p), s: 0, m: 0, n: 0};
+    f.s += t.score; f.m += t.max; f.n++;
+    p.qs.forEach((q, i) => { const g = Math.min(2, Math.floor(i / p.qs.length * 3)); pos[g][0] += (t.items || [])[i] || 0; pos[g][1] += qMax(q); });
+  }));
+  return {recs, F: Object.values(F), pos};
+}
+function mockWeakText(){
+  const D = mockWeakData(); let t = "【適性検査アプリ 模擬試験 弱点分析】" + today() + "\n（本番と同じ形式の模擬試験。各回の合計を70点満点に換算）\n\n■受験の記録\n";
+  D.recs.slice(-10).forEach(m => { t += "・" + m.date + " " + mockLabel(m) + "：" + m.pt70 + "／70点（" + m.pct + "％）" + (m.used != null ? " " + m.used + "分" : "") + "［" + mockStateLabel(m) + "］\n"; });
+  ["I", "II"].forEach(sb => { const rows = D.F.filter(f => f.sub === sb); if (!rows.length) return; t += "\n■" + SUBN[sb].replace(/（.*）/, "") + " 課題の種類ごとの得点率\n"; rows.sort((a, b) => a.s / a.m - b.s / b.m).forEach(f => { t += "・" + f.name + "：" + Math.round(f.s / f.m * 100) + "％（" + f.n + "回）\n"; }); });
+  const nm = ["前半", "中盤", "後半"]; t += "\n■設問の位置ごとの得点率（各課題の前半は易しく、後半ほど難しい）\n"; D.pos.forEach((x, i) => { if (x[1]) t += "・" + nm[i] + "：" + Math.round(x[0] / x[1] * 100) + "％\n"; });
+  t += "\n■点を落とした小問（各回の最新の結果で満点でないもの）\n"; let c = 0;
+  D.recs.slice().reverse().filter((m, i, a) => a.findIndex(x => x.sub === m.sub && x.setId === m.setId) === i).forEach(m => m.tasks.forEach(tk => { const p = byId(tk.pid); if (!p) return; p.qs.forEach((q, i) => { const mx = qMax(q), g = (tk.items || [])[i] || 0; if (mx && g < mx && c < 40) { c++; t += "- " + p.id + "「" + p.title + "」" + mfield(p) + " 問" + (i + 1) + "：" + g + "／" + mx + "点　採点基準：" + q.rubric.map(x => x[0].replace(/（.*?）/g, "")).join("／").slice(0, 120) + "\n"; } }); }));
+  return t + "\nこの結果をもとに、苦手な課題の種類について、本番形式の類題（場面・資料つき、型は同じで数字や場面を変えたもの）を作ってください。\n";
+}
+function mockWeak(){
+  title("模擬試験の弱点分析"); setHdr(""); showFab(false);
+  const D = mockWeakData(), all = db.mocks.filter(m => m.tasks);
+  if (!all.length) { $("#app").innerHTML = '<div class="card">まだ模擬試験の記録がありません。ホームの「適性検査Ⅰ・Ⅱ」を解いて、採点が入ると、ここに分析が出ます。</div>'; return; }
+  let h = '<p class="muted">模擬試験だけの分析です（練習問題の「得意・不得意」とは別です）。</p>';
+  h += '<h2>受験の記録</h2><div class="card">' + all.slice().reverse().slice(0, 10).map(m => `<div style="margin:8px 0"><div class="row"><span>${esc(m.date)}</span><b>${esc(mockLabel(m))}</b><span class="spacer"></span>${m.partial ? '<span class="badge">一部のみ</span>' : `<span class="badge ${pctCls(m.pct)}">${m.pt70}/70点（${m.pct}％）</span>`}</div>${m.partial ? "" : `<div class="bar"><i style="width:${m.pct}%"></i></div>`}<div class="muted">${mockStateLabel(m)}${m.used != null ? "　" + m.used + "分で終了" : ""}</div></div>`).join("") + '</div>';
+  ["I", "II"].forEach(sb => {
+    const rows = D.F.filter(f => f.sub === sb); if (!rows.length) return;
+    h += '<h2>' + esc(SUBN[sb].replace(/（.*）/, "")) + '　課題の種類ごとの得点率</h2><div class="card">';
+    rows.sort((a, b) => a.s / a.m - b.s / b.m).forEach(f => { const v = Math.round(f.s / f.m * 100), L = f.n >= 2 ? (v >= 80 ? ["good", "得意"] : v >= 60 ? ["mid", "もう少し"] : ["bad", "伸びしろ"]) : ["", "参考"]; h += `<div style="margin:8px 0"><div class="row"><b>${esc(f.name)}</b><span class="spacer"></span><span class="badge ${L[0]}">${L[1]}　${v}％</span><span class="muted" style="margin-left:8px">${f.n}回</span></div><div class="bar"><i style="width:${v}%"></i></div></div>`; });
+    h += '</div>';
+  });
+  if (D.pos.some(x => x[1])) { const nm = ["前半（易しい問い）", "中盤", "後半（難しい問い）"]; h += '<h2>設問の位置ごとの得点率</h2><div class="card">' + D.pos.map((x, i) => { if (!x[1]) return ""; const v = Math.round(x[0] / x[1] * 100); return `<div style="margin:8px 0"><div class="row"><span>${nm[i]}</span><span class="spacer"></span><b>${v}％</b></div><div class="bar"><i style="width:${v}%"></i></div></div>`; }).join("") + '<p class="note" style="margin:8px 0 0">前半で点を落とすなら読み間違い・計算ミス、後半だけ低いなら時間配分や発展的な問いが課題です。</p></div>'; }
+  const us = D.recs.filter(m => m.used != null); if (us.length) h += `<h2>時間の使い方</h2><div class="card"><div class="row"><span>平均の所要時間</span><span class="spacer"></span><b>${Math.round(us.reduce((a, m) => a + m.used, 0) / us.length)}分 / 45分</b></div><div class="row"><span>時間いっぱいまで使った回</span><span class="spacer"></span><b>${us.filter(m => m.used >= 45).length} / ${us.length}</b></div></div>`;
+  h += '<h2>保護者の方へ</h2><div class="card"><p class="note" style="margin:0 0 8px">下のボタンで、模擬試験の成績の文章をコピーできます。Claudeに貼ると、苦手な課題の本番形式の類題づくりに使えます。</p><div class="row"><button id="mwcopy" class="primary">模擬試験の成績をコピー</button></div><textarea id="mwtxt" readonly style="width:100%;height:120px;margin-top:8px;display:none"></textarea></div>';
+  $("#app").innerHTML = h;
+  $("#mwcopy").onclick = async () => { const t = mockWeakText(); try { await navigator.clipboard.writeText(t); $("#mwcopy").textContent = "コピーしました ✓"; } catch (e) { const a = $("#mwtxt"); a.value = t; a.style.display = "block"; a.select(); $("#mwcopy").textContent = "下の文章をコピーしてください"; } };
+}
+
 function review(){
   title("復習リスト"); setHdr(""); showFab(false);
   const rows = P.map(p => ({p, r:lastOf(p.id)})).filter(x => x.r && pct(x.r) < 70).sort((a,b) => pct(a.r) - pct(b.r));
@@ -561,21 +646,23 @@ function review(){
 function route(){
   stopTimer(); cur = null; window.scrollTo(0,0);
   const h = location.hash.replace(/^#/,"").split("/");
-  if (h[0] === "weak" || h[0] === "stats") { if (!window.__parent) { location.hash = ""; return; } } else window.__parent = false;
-  ({"list": () => list(h[1]), "p": () => practice(h[1]), "mock": () => mockStart(h[1]), "stats": stats, "weak": weak, "review": review, "inbox": () => inbox(), "buddy": () => Buddy.page(), "boss": () => Buddy.boss(), "codex": () => Buddy.codex()}[h[0]] || home)();
+  if (h[0] === "weak" || h[0] === "stats" || h[0] === "mweak") { if (!window.__parent) { location.hash = ""; return; } } else window.__parent = false;
+  ({"list": () => list(h[1]), "p": () => practice(h[1]), "mock": () => mockStart(h[1], h[2]), "stats": stats, "weak": weak, "review": review, "inbox": () => inbox(), "mscore": () => inbox(false, true), "mweak": mockWeak, "buddy": () => Buddy.page(), "boss": () => Buddy.boss(), "codex": () => Buddy.codex()}[h[0]] || home)();
   $("#back").classList.toggle("hide", !h[0]);
 }
 addEventListener("hashchange", route);
-$("#back").onclick = () => { if (cur && cur.mode === "mock" && cur.phase === "solve" && !confirm("模擬を中止して戻りますか？（入力は消えます）")) return; history.length > 1 ? history.back() : (location.hash = ""); };
+$("#back").onclick = () => { if (cur && cur.mode === "mock" && cur.phase === "solve" && !confirm("模擬試験を中止して戻りますか？（入力は消えます）")) return; history.length > 1 ? history.back() : (location.hash = ""); };
 document.addEventListener("click", e => {
   const g = e.target.closest("[data-go]"); if (g) { location.hash = g.dataset.go; return; }
   if (e.target.id === "reveal") { $("#panel").classList.add("revealed"); $("#reveal").classList.add("hide"); $("#after").classList.remove("hide"); applyAuto(); $("#panel .q .ans").scrollIntoView({behavior:"smooth", block:"start"}); }
   if (e.target.id === "queue" && cur) { queueAll(); e.target.disabled = true; afterQueued(); }
   if (e.target.id === "save" && cur && !cur.saved) {
-    const d = today(); let S = 0, M = 0;
-    cur.ps.forEach((p,i) => { const sub = ensureSub(i); const r = scoreOf(i); S += r.score; M += r.max; db.results.push({lap:(window.Buddy?Buddy.lap():1), pid:p.id, date:d, score:r.score, max:r.max, mode:cur.mode, src:"self", items:r.items, sid:sub.id}); });
-    if (cur.mode === "mock") db.mocks.push({date:d, sub:cur.sub, score:S, max:M, pct:Math.round(S/M*100), used:cur.used, lap:(window.Buddy?Buddy.lap():1)});
-    persist(); if (window.Buddy) Buddy.complete(cur.ps.map(p => p.id), {self:true, mock:cur.mode === "mock"});
+    const d = today(); let S = 0, M = 0; const lapN = (window.Buddy?Buddy.lap():1), tasks = [];
+    cur.ps.forEach((p,i) => { const sub = ensureSub(i); const r = scoreOf(i); S += r.score; M += r.max;
+      if (cur.mode === "mock") tasks.push({pid:p.id, score:r.score, max:r.max, items:r.items, self:{score:r.score, items:r.items}});   // 模擬試験は練習の記録(results)には入れない
+      else db.results.push({lap:lapN, pid:p.id, date:d, score:r.score, max:r.max, mode:cur.mode, src:"self", items:r.items, sid:sub.id}); });
+    if (cur.mode === "mock") db.mocks.push({id:cur.mid, date:d, sub:cur.sub, setId:cur.setId, score:S, max:M, pt70:Math.round(S/M*70), pct:Math.round(S/M*100), used:cur.used, lap:lapN, src:"self", tasks});
+    persist(); if (window.Buddy) { if (cur.mode === "mock") Buddy.mockDone(cur.sub, cur.setId); else Buddy.complete(cur.ps.map(p => p.id), {self:true}); }
     cur.saved = true; e.target.disabled = true; e.target.textContent = "記録しました ✓";
     afterQueued();
   }
