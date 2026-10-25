@@ -18,8 +18,8 @@ window.BUDDY_CFG = {
   hatchXp: 100,               // 経験値がこれに達するとタマゴがかえる
   tie: 5,                     // 型の判定：経験値の割合（％）の差がこの値以内なら「同じくらい」
   mid:   {xp: 300, top1: 40},               // 成体：経験値300＋どれかの科目の習熟度が40以上
-  final: {xp: 600, count: 2, min: 40,       // 究極進化：経験値600＋2科目の習熟度が40以上
-          mockPct: 80, needBoth: true}      //          ＋45分模擬（Ⅰ・Ⅱ）の合計が80％以上
+  final: {xp: 1000, mockTries: 1,           // 究極進化：経験値1000＋適性検査 模擬試験に1回以上チャレンジ（習熟度・得点率の条件なし）
+          mockPct: 80, needBoth: true}      // 　　（mockPct・needBoth は「神」の条件 mockOk 用）
 };
 
 (function () {
@@ -129,13 +129,16 @@ window.BUDDY_CFG = {
   }
 
   function mockOk(L) {
-    const f = C.final, ms = (db.mocks || []).filter(m => (m.lap || 1) === L);
+    const f = C.final, ms = (db.mocks || []).filter(m => (m.lap || 1) === L && !m.partial);   // 模擬試験：一部の課題しか採点されていない記録は数えない
     const last = s => { const a = ms.filter(m => m.sub === s); return a[a.length - 1]; };
     const a = last("I"), c = last("II");
     if (f.needBoth) { if (!a || !c) return false; return (a.score + c.score) / Math.max(1, a.max + c.max) * 100 >= f.mockPct; }
     const x = [a, c].filter(Boolean); if (!x.length) return false;
     return x.reduce((s, m) => s + m.score, 0) / Math.max(1, x.reduce((s, m) => s + m.max, 0)) * 100 >= f.mockPct;
   }
+
+  // 模擬試験にチャレンジしたか（この周の記録、または送信待ちの模擬がある）
+  function mockTried(L) { return (db.mocks || []).filter(m => (m.lap || 1) === L).length + (db.subs || []).filter(x => x.mock).length >= C.final.mockTries; }
 
   // 進化の判定。変化があれば内容を返す
   function evaluate() {
@@ -150,7 +153,7 @@ window.BUDDY_CFG = {
       b.stage = 2; b.codex[t] = b.codex[t] || todayStr(); b.maxStage[t] = Math.max(b.maxStage[t] || 0, 2); b.forms = b.forms || {}; b.forms[t + "_2"] = b.forms[t + "_2"] || todayStr();
       evs.push({kind: "stage", stage: 2, from: from, type: t}); b.evo.push({date: todayStr(), stage: 2, type: t, from: from});
     }
-    if (b.stage === 2 && b.xp >= C.final.xp && v.filter(x => x >= C.final.min).length >= C.final.count && mockOk(lap())) {
+    if (b.stage === 2 && b.xp >= C.final.xp && mockTried(lap())) {
       const from = b.typeLock, t = decideType(b.xpSub) || from; b.typeLock = t;
       b.stage = 3; b.codex[t] = b.codex[t] || todayStr(); b.maxStage[t] = Math.max(b.maxStage[t] || 0, 3); b.forms = b.forms || {}; b.forms[t + "_3"] = b.forms[t + "_3"] || todayStr();
       evs.push({kind: "stage", stage: 3, from: from, type: t}); b.evo.push({date: todayStr(), stage: 3, type: t, from: from});
@@ -307,6 +310,14 @@ window.BUDDY_CFG = {
     afterEvent(gain, "completed", sk);
     return gain;
   }
+  // 模擬試験を最後までやった（その回ではじめてのときだけ、経験値 xpMock を2科目に等分）
+  function mockDone(sub, setId) {
+    const b = B(), k = "m:" + lap() + ":" + sub + ":" + setId, by = zero();
+    markStudy();
+    if (!b.xpLog[k]) { b.xpLog[k] = {done: todayStr()}; (sub === "I" ? ["math", "science"] : ["japanese", "society"]).forEach(x => { by[x] += C.xpMock / 2; }); }
+    const gain = addXp(by); persist(); afterEvent(gain, "completed", null);
+    return gain;
+  }
   // 親の採点が入った。list: [{sid, pid, score, max, self:{score,max}|null}]
   function graded(list) {
     const b = B(), by = zero();
@@ -317,7 +328,8 @@ window.BUDDY_CFG = {
       if (!g.max) return;
       let x = Math.floor(C.xpParentMax * g.score / g.max);
       if (g.self && g.self.max) { const d = Math.abs(g.score / g.max - g.self.score / g.self.max) * 100; if (d <= 10) x += C.xpExact; }
-      by[subjOf(byId(g.pid))] += x;
+      const gp = byId(g.pid); if (!gp) return;   // 模擬試験の問題は練習の経験値には入れない
+      by[subjOf(gp)] += x;
     });
     const gain = addXp(by); persist();
     let sc = 0, mx = 0; list.forEach(g => { if (g.max) { sc += g.score; mx += g.max; } });
@@ -497,8 +509,7 @@ window.BUDDY_CFG = {
     }
     if (f.stage === 2) {
       const m = C.final; if (b.xp < m.xp) need.push("あと経験値 " + (m.xp - b.xp));
-      if (v.filter(x => x >= m.min).length < m.count) need.push(m.count + "科目の習熟度を " + m.min + " 以上に");
-      if (!mockOk(lap())) need.push("45分模擬（Ⅰ・Ⅱ）で合計 " + m.mockPct + "％以上");
+      if (!mockTried(lap())) need.push("適性検査 模擬試験に " + m.mockTries + "回チャレンジ");
       return {frac: Math.min(1, (b.xp - C.mid.xp) / (m.xp - C.mid.xp)), need, label: "究極進化"};
     }
     return null;
@@ -1300,6 +1311,6 @@ window.BUDDY_CFG = {
   document.head.appendChild(css2);
 
   function check() { const evs = evaluate(); if (evs.length) setTimeout(() => evoOverlay(evs), 500); }
-  window.Buddy = {godQ: GODQ, isDev: () => devMode, boss, bossCheck, friendCount, rewardOverlay, check, init, card, page, codex, complete, graded, status, form, proficiency, subjOf, lap, evaluate, decideType, TYPES, SUBJ, SUBJN};
+  window.Buddy = {godQ: GODQ, mockDone, isDev: () => devMode, boss, bossCheck, friendCount, rewardOverlay, check, init, card, page, codex, complete, graded, status, form, proficiency, subjOf, lap, evaluate, decideType, TYPES, SUBJ, SUBJN};
   try { init(); } catch (e) {}
 })();
