@@ -166,12 +166,21 @@ function judge(q, input){
 const collect = pi => cur.ps[pi].qs.map((q,i) => { const t = document.querySelector('textarea[data-ans="'+pi+'_'+i+'"]'); return t ? t.value : ""; });
 
 /* ---------- 画面 ---------- */
+// 入試本番までの日数（本番：2027年1月9日）
+const EXAM_DAY = new Date(2027, 0, 9);
+function countdownHTML(){
+  const t = new Date(), d0 = new Date(t.getFullYear(), t.getMonth(), t.getDate()), n = Math.round((EXAM_DAY - d0) / 86400000);
+  if (n < 0) return "";
+  const msg = n === 0 ? "今日が本番！　いつもの力を出そう" : `本番（1月9日）まで　あと <b style="font-size:1.6em;color:var(--accent,#d9480f)">${n}</b> 日`;
+  return `<div class="card" style="text-align:center;padding:10px 12px;margin-bottom:10px">${msg}</div>`;
+}
 function home(){
   if (window.Buddy) setTimeout(() => Buddy.check(), 400);
   title("適性検査トレーニング"); setHdr(""); showFab(false);
   const n = db.results.length, pe = nPend(), se = nSent(), mpe = nPend(true), mse = nSent(true);
   $("#app").innerHTML = `
   ${window.__loadBroken ? '<div class="msg">保存データを読み込めませんでした。元のデータはバックアップとして残してあります。お手数ですが、保護者の方にお知らせください。</div>' : ""}
+  ${countdownHTML()}
   ${window.Buddy ? Buddy.card() : ""}
   <p class="muted">岡山県立中学校の適性検査に備える練習アプリです。（問題は全てオリジナルです）</p>
   <h2>練習</h2>
