@@ -102,8 +102,8 @@ window.BUDDY_CFG = {
 
   // 科目別の習熟度（0〜100）。現在の周回の、問題ごとの最新の得点率の平均×（解いた数/3 で最大1）
   function proficiency() {
-    const L = lap(), latest = {};
-    (db.results || []).forEach(r => { if ((r.lap || 1) === L) latest[r.pid] = r; });
+    const latest = {};   // 旅立ち（周回）をこえて引き継ぐ：問題ごとに、これまでで一番あたらしい結果を使う
+    (db.results || []).forEach(r => { latest[r.pid] = r; });
     const acc = {}; SUBJ.forEach(s => acc[s] = {sum: 0, n: 0});
     Object.keys(latest).forEach(pid => {
       const p = byId(pid); if (!p) return;
@@ -689,7 +689,7 @@ window.BUDDY_CFG = {
     god:     {stage: 3, min: 72, avg: 84, mock: true, friends: 1}
   };
   const LAP_UP = 10;
-  const GOD_LOSS_FOR_MAMA = 3;     // 神に3回負けると、女神ママテミスがお助けキャラになる（1日1回までカウント）
+  const GOD_LOSS_FOR_MAMA = 3;     // 神に3回負けると、女神ママテミスがお助けキャラになる（負けるたびに数える）
   // 挑戦できるのは「一番手前の、まだ倒していないBOSS」だけ（この並びが挑戦の順番）
   const BOSSES = [
     {id: "taurus", n: "半人前パパタウロス", img: "boss_1.webp", appear: "ブヒッ", lose: "おでに勝つなんてやるなぁ", win: "えっ、ザコ？", title: "ツノ折り見習い"},
@@ -931,12 +931,7 @@ window.BUDDY_CFG = {
         bgmStop();
         if (!A.win) {
           let mama = false;
-          if (!dev && id === "god") {
-            const g = st.god = st.god || {tries: 0}; g.losses = g.losses || 0;
-            if (g.lossDay !== todayStr()) { g.lossDay = todayStr(); g.losses++; }
-            if (g.losses >= GOD_LOSS_FOR_MAMA && !specialsOf().mama) { specialsOf().mama = todayStr(); mama = true; }
-            persist();
-          }
+          if (!dev && id === "god") mama = godLossCount();
           o.className = "bd-evo";
           o.innerHTML = `<div class="box"><div class="bb-name">${esc(bo.n)}</div><div class="bb-appear">${img()}</div><div class="bd-rmsg"><b>「${esc(bo.win)}」</b>${bossHint(A.c).map(x => `<p>${esc(x)}</p>`).join("")}</div><div class="bd-rxp">失うものは 何もないよ。力をためて、また来よう！</div><div class="row" style="justify-content:center;margin-top:12px"><button class="primary" id="bbBk">戻る</button></div></div>`;
           o.querySelector("#bbBk").onclick = () => { if (mama) { o.remove(); specialOverlay(["mama"], boss); } else back(); };
@@ -1049,10 +1044,11 @@ window.BUDDY_CFG = {
     };
     hit();
   }
-  // 神に負けた回数を数える（1日1回まで）。3回で女神ママテミスがお助けキャラに。戻り値＝いま加入したか
+  // 神に負けた回数を数える（負けるたびに1回）。3回で女神ママテミスがお助けキャラに。戻り値＝いま加入したか
   function godLossCount() {
     const st = bossState(), g = st.god = st.god || {tries: 0}; g.losses = g.losses || 0;
-    if (g.lossDay !== todayStr()) { g.lossDay = todayStr(); g.losses++; }
+    if (!g.lossFix) { g.lossFix = 1; if (g.losses >= 1 && g.losses < GOD_LOSS_FOR_MAMA - 1) g.losses = GOD_LOSS_FOR_MAMA - 1; }   // v35：以前は1日1回までだった。すでに負けたことがある人は、次の1回で加入
+    g.losses++;
     let mama = false;
     if (g.losses >= GOD_LOSS_FOR_MAMA && !specialsOf().mama) { specialsOf().mama = todayStr(); mama = true; }
     persist(); return mama;
